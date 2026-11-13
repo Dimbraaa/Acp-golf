@@ -1,6 +1,8 @@
 # Approche Chip Putt — PWA
 
-Suivi des points Approche / Chip / Putt au golf (2 à 4 joueurs, 9 ou 18 trous), 100 % hors ligne.
+Carte de score golf, 100 % hors ligne, 9 ou 18 trous. Deux formules au choix à la création de la partie :
+- **Approche / Chip / Putt** (2 à 4 joueurs)
+- **4-2-0 (la Chouette)** à 3 joueurs, **6-4-2-0** à 4 joueurs, en brut ou en net. Le net utilise les parcours intégrés (Valcros, Valgarde, Barbaroux) ; « Autre golf » se joue en brut.
 
 ## Installer sur l'iPhone
 1. Ouvrir l'URL dans **Safari** (avec du réseau, une fois).
