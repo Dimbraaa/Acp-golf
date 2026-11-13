@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14532d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ACP Golf">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Approche Chip Putt</title>
+<style>
+  :root {
+    --green: #14532d; --green2: #166534; --green-soft: #e7f3eb;
+    --bg: #f3f5f2; --card: #fff; --text: #111827; --muted: #5b6560; --line: #d6ddd8;
+    --a: #1d4ed8; --c: #c2410c; --p: #15803d; --danger: #b91c1c;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+  body { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+  button, select, input { font: inherit; color: inherit; }
+  button { touch-action: manipulation; cursor: pointer; -webkit-user-select: none; user-select: none; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10; background: var(--green); color: #fff;
+    padding: calc(env(safe-area-inset-top) + 8px) 8px 8px; display: flex; align-items: center; gap: 4px; min-height: 52px;
+  }
+  header.top h1 { flex: 1; margin: 0; font-size: 18px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hbtn { background: none; border: none; color: #fff; font-size: 16px; font-weight: 600; padding: 10px 8px; min-width: 84px; text-align: left; }
+  .hbtn.right { text-align: right; }
+  .hbtn:active { opacity: .6; }
+
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px calc(env(safe-area-inset-bottom) + 112px); }
+  .bottombar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: rgba(243,245,242,.97);
+    border-top: 1px solid var(--line); padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px);
+  }
+  .bottombar .inner { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+
+  .btn { display: block; width: 100%; min-height: 54px; border-radius: 14px; border: 2px solid transparent; font-size: 17px; font-weight: 700; padding: 0 16px; }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--green2); color: #fff; }
+  .btn-secondary { background: #fff; color: var(--green2); border-color: var(--green2); }
+  .btn-danger { background: #fff; color: var(--danger); border-color: #f1c4c4; }
+  .link { background: none; border: none; color: var(--muted); text-decoration: underline; font-size: 15px; padding: 10px; display: block; margin: 4px auto 0; }
+  .link.danger { color: var(--danger); }
+
+  .card { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .card h2 { margin: 0 0 6px; font-size: 18px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 14px; }
+  .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 4px 8px; }
+
+  /* Formulaire */
+  label.field { display: block; font-weight: 600; margin-bottom: 6px; }
+  .input { width: 100%; height: 50px; border: 2px solid var(--line); border-radius: 12px; padding: 0 14px; font-size: 17px; background: #fff; }
+  .input:focus { outline: none; border-color: var(--green2); }
+  .player-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .player-row .input { flex: 1; }
+  .icon-btn { width: 50px; height: 50px; border-radius: 12px; border: 2px solid var(--line); background: #fff; font-size: 22px; color: var(--danger); }
+  .seg { display: flex; background: #e4e9e5; border-radius: 12px; padding: 4px; gap: 4px; }
+  .seg button { flex: 1; height: 44px; border: none; border-radius: 9px; background: transparent; font-weight: 700; font-size: 16px; color: var(--muted); }
+  .seg button.on { background: #fff; color: var(--green); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .err { color: var(--danger); font-weight: 600; margin-top: 10px; }
+
+  /* Écran trou */
+  .holehead { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 10px; }
+  .holehead .num { font-size: 30px; font-weight: 800; }
+  .holehead .prog { color: var(--muted); font-weight: 600; }
+  .totals { display: grid; gap: 6px; margin-bottom: 14px; }
+  .tot { background: #fff; border-radius: 12px; padding: 8px 6px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.06); min-width: 0; }
+  .tot .n { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tot .v { font-size: 24px; font-weight: 800; line-height: 1.1; }
+  .tot .d { font-size: 12px; font-weight: 700; color: var(--green2); min-height: 15px; }
+  .point { background: #fff; border-radius: 16px; padding: 12px; margin-bottom: 12px; border-left: 6px solid var(--cat); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .point .ph { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .point .pt { font-size: 21px; font-weight: 800; color: var(--cat); }
+  .point .hint { font-size: 13px; color: var(--muted); text-align: right; }
+  .choices { display: grid; gap: 8px; margin-top: 10px; }
+  .choice { min-height: 62px; border-radius: 12px; border: 2px solid var(--line); background: #fff; font-size: 18px; font-weight: 700; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .choice.sel { background: var(--cat); border-color: var(--cat); color: #fff; }
+  .choice.sel::before { content: "✓ "; }
+  .nobody { font-size: 13px; color: var(--muted); margin-top: 8px; text-align: center; min-height: 17px; }
+  .editbanner { background: #fff7e6; border: 2px solid #f5c26b; color: #7a4b00; border-radius: 12px; padding: 10px 12px; font-weight: 600; margin-bottom: 12px; }
+
+  /* Carte de score */
+  .winner { background: var(--green); color: #fff; border-radius: 16px; padding: 18px; text-align: center; margin-bottom: 14px; }
+  .winner .big { font-size: 22px; font-weight: 800; }
+  .rank { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid #edf0ee; }
+  .rank:last-child { border-bottom: none; }
+  .rank .pos { width: 34px; font-weight: 800; color: var(--muted); }
+  .rank .nm { flex: 1; font-weight: 700; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank .pts { font-weight: 800; font-size: 20px; }
+  .rank .det { font-size: 12px; color: var(--muted); }
+  table.sc { width: 100%; border-collapse: collapse; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.06); table-layout: fixed; }
+  table.sc th, table.sc td { padding: 9px 2px; text-align: center; border-bottom: 1px solid #edf0ee; font-size: 15px; }
+  table.sc th { background: var(--green); color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.sc th:first-child, table.sc td:first-child { width: 52px; font-weight: 800; }
+  table.sc tbody tr { cursor: pointer; }
+  table.sc tbody tr:active { background: #eef5f0; }
+  table.sc tr.cur td { background: #fff7e6; }
+  table.sc tr.todo td { color: #a8b0ab; }
+  table.sc tfoot td { background: var(--green-soft); font-weight: 800; font-size: 18px; border-bottom: none; }
+  .bd { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 800; margin: 1px; }
+  .bd.a { background: var(--a); } .bd.c { background: var(--c); } .bd.p { background: var(--p); }
+  .legend { display: flex; gap: 14px; justify-content: center; margin: 10px 0 0; font-size: 13px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+
+  /* Accueil */
+  .hero { text-align: center; padding: 8px 0 4px; }
+  .hero img { width: 76px; height: 76px; border-radius: 18px; }
+  .hist { display: flex; align-items: center; gap: 10px; padding: 12px 2px; border-bottom: 1px solid #edf0ee; background: none; border-left: none; border-right: none; border-top: none; width: 100%; text-align: left; }
+  .hist:last-child { border-bottom: none; }
+  .hist .t { flex: 1; min-width: 0; }
+  .hist .t div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chev { color: #a8b0ab; font-size: 22px; }
+  details.rules summary { font-weight: 700; cursor: pointer; padding: 4px 0; }
+  details.rules p, details.rules li { font-size: 15px; line-height: 1.45; }
+  details.rules ul { padding-left: 20px; margin: 6px 0; }
+
+  /* Modale & toast */
+  .overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px calc(env(safe-area-inset-bottom) + 16px); }
+  .sheet { background: #fff; border-radius: 18px; padding: 20px; width: 100%; max-width: 520px; max-height: 88vh; overflow: auto; }
+  .sheet p { font-size: 17px; margin: 0 0 16px; line-height: 1.4; }
+  .sheet .btns { display: flex; flex-direction: column; gap: 8px; }
+  .sheet img { width: 100%; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 12px; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 66px); z-index: 60; background: #111827; color: #fff; padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 15px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="modal"></div>
+
+<script>
+'use strict';
+
+/* ---------- Données ---------- */
+const KEY = 'acp-golf-v1';
+const CATS = [
+  { k: 'a', name: 'Approche', letter: 'A', color: '#1d4ed8', hint: '1er sur le green' },
+  { k: 'c', name: 'Chip',     letter: 'C', color: '#c2410c', hint: 'Le plus près, tous sur le green' },
+  { k: 'p', name: 'Putt',     letter: 'P', color: '#15803d', hint: '1er dans le trou' }
+];
+
+let S = load();
+
+function blank() {
+  return { games: [], last: { players: ['', ''], course: '' }, ui: { screen: 'home' } };
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.games) && s.ui) return s;
+  } catch (e) {}
+  return blank();
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch (e) { toast('⚠️ Sauvegarde impossible'); }
+}
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const getGame = (id) => S.games.find((g) => g.id === id);
+const activeGame = () => S.games.find((g) => g.status === 'playing');
+const currentIdx = (g) => g.holes.findIndex((h) => !h.done);
+const fmtDate = (iso, long) => new Date(iso).toLocaleDateString('fr-FR', long
+  ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+  : { day: 'numeric', month: 'short', year: 'numeric' });
+
+// Trous à afficher : ceux du jeu, en remplaçant éventuellement un trou par son brouillon (correction en cours)
+function holesView(g) {
+  const u = S.ui;
+  if (u.draft && u.gameId === g.id) return g.holes.map((h, i) => (i === u.holeIdx ? u.draft : h));
+  return g.holes;
+}
+function totals(g, holes) {
+  holes = holes || g.holes;
+  const t = g.players.map(() => ({ pts: 0, a: 0, c: 0, p: 0 }));
+  holes.forEach((h) => CATS.forEach((c) => { if (h[c.k] !== null) { t[h[c.k]].pts++; t[h[c.k]][c.k]++; } }));
+  return t;
+}
+function ranking(g) {
+  const t = totals(g);
+  const r = g.players.map((n, i) => ({ i, n, ...t[i] })).sort((x, y) => y.pts - x.pts);
+  r.forEach((o, k) => { o.rank = k > 0 && o.pts === r[k - 1].pts ? r[k - 1].rank : k + 1; });
+  return r;
+}
+const rankLabel = (r) => (r === 1 ? '1er' : r + 'e');
+function winnerText(g) {
+  const r = ranking(g);
+  const top = r.filter((o) => o.rank === 1);
+  if (top.length === 1) return `🏆 ${esc(top[0].n)} gagne avec ${top[0].pts} point${top[0].pts > 1 ? 's' : ''}`;
+  return `🤝 Égalité : ${top.map((o) => esc(o.n)).join(' & ')} (${top[0].pts} pts)`;
+}
+
+/* ---------- Navigation ---------- */
+function go(ui) { S.ui = ui; save(); render(); window.scrollTo(0, 0); }
+
+/* ---------- Rendu ---------- */
+function render() {
+  const u = S.ui;
+  let g = u.gameId ? getGame(u.gameId) : null;
+  if ((u.screen === 'hole' || u.screen === 'card') && !g) { S.ui = { screen: 'home' }; return render(); }
+  let html = '';
+  if (u.screen === 'setup') html = viewSetup();
+  else if (u.screen === 'hole') html = viewHole(g);
+  else if (u.screen === 'card') html = viewCard(g);
+  else html = viewHome();
+  document.getElementById('app').innerHTML = html;
+}
+
+function header(left, title, right) {
+  return `<header class="top">${left || '<span class="hbtn"></span>'}<h1>${title}</h1>${right || '<span class="hbtn right"></span>'}</header>`;
+}
+
+function viewHome() {
+  const g = activeGame();
+  const done = S.games.filter((x) => x.status === 'finished').sort((a, b) => b.created.localeCompare(a.created));
+  let h = header('', 'Approche · Chip · Putt', '');
+  h += '<main>';
+  h += `<div class="hero"><img src="icon-192.png" alt=""></div>`;
+  if (g) {
+    const ci = currentIdx(g);
+    h += `<div class="section-title">Partie en cours</div><div class="card">
+      <h2>${g.course ? esc(g.course) : 'Partie du ' + fmtDate(g.created)}</h2>
+      <div class="muted small" style="margin-bottom:12px">${g.players.map(esc).join(' · ')}<br>
+      Trou ${g.holes[ci].n} — ${ci + 1}/${g.holes.length}</div>
+      <button class="btn btn-primary" data-act="resume">Reprendre la partie</button>
+      <button class="link danger" data-act="abandon">Abandonner cette partie</button></div>`;
+  }
+  h += `<button class="btn ${g ? 'btn-secondary' : 'btn-primary'}" data-act="newGame" style="margin-top:8px">Nouvelle partie</button>`;
+  h += `<div class="section-title">Règles</div><div class="card"><details class="rules"><summary>Rappel des règles</summary>
+    <p>3 points en jeu sur chaque trou, quel que soit le score en strokeplay :</p>
+    <ul><li><b>Approche</b> : premier joueur sur le green (peu importe le nombre de coups).</li>
+    <li><b>Chip</b> : une fois toutes les balles sur le green, le plus proche du trou.</li>
+    <li><b>Putt</b> : premier joueur à rentrer sa balle.</li></ul>
+    <p><b>Ready golf</b> : chacun joue quand il est prêt, mais pour l'Approche et le Putt, c'est le joueur le plus loin du trou avant son coup qui remporte le point s'il réussit.</p>
+    <p>Un joueur peut rafler les 3 points d'un trou. Total des points à la fin.</p></details></div>`;
+  if (done.length) {
+    h += `<div class="section-title">Parties terminées</div><div class="card" style="padding:4px 14px">`;
+    done.forEach((x) => {
+      const r = ranking(x);
+      const top = r.filter((o) => o.rank === 1);
+      h += `<button class="hist" data-act="openCard" data-id="${x.id}"><div class="t">
+        <div><b>${x.course ? esc(x.course) : 'Partie'}</b> · <span class="muted">${fmtDate(x.created)}</span></div>
+        <div class="muted small">${top.length === 1 ? '🏆 ' + esc(top[0].n) : '🤝 ' + top.map((o) => esc(o.n)).join(' & ')} — ${top[0].pts} pts · ${x.holes.length} trous</div>
+        </div><span class="chev">›</span></button>`;
+    });
+    h += '</div>';
+  }
+  h += '</main>';
+  return h;
+}
+
+function viewSetup() {
+  const f = S.ui.form;
+  let h = header('<button class="hbtn" data-act="home">‹ Annuler</button>', 'Nouvelle partie', '');
+  h += '<main>';
+  h += `<div class="card"><label class="field">Joueurs (2 à 4)</label>`;
+  f.players.forEach((p, i) => {
+    h += `<div class="player-row"><input class="input" data-field="player" data-i="${i}" value="${esc(p)}" placeholder="Prénom joueur ${i + 1}" autocomplete="off" autocapitalize="words" maxlength="16">
+      ${f.players.length > 2 ? `<button class="icon-btn" data-act="removePlayer" data-i="${i}" aria-label="Retirer">×</button>` : ''}</div>`;
+  });
+  if (f.players.length < 4) h += `<button class="btn btn-secondary" data-act="addPlayer" style="min-height:46px;font-size:16px">+ Ajouter un joueur</button>`;
+  h += `</div>`;
+  h += `<div class="card"><label class="field">Golf (facultatif)</label>
+    <input class="input" data-field="course" value="${esc(f.course)}" placeholder="Ex. Golf de Valgarde" autocomplete="off" maxlength="40"></div>`;
+  h += `<div class="card"><label class="field">Nombre de trous</label>
+    <div class="seg"><button class="${f.count === 9 ? 'on' : ''}" data-act="setCount" data-v="9">9 trous</button>
+    <button class="${f.count === 18 ? 'on' : ''}" data-act="setCount" data-v="18">18 trous</button></div>
+    <label class="field" style="margin-top:16px">Trou de départ</label>
+    <select class="input" data-field="start">${Array.from({ length: 18 }, (_, i) => `<option value="${i + 1}" ${f.start === i + 1 ? 'selected' : ''}>Trou ${i + 1}</option>`).join('')}</select>
+    <div class="muted small" style="margin-top:8px" id="seq">${seqText(f)}</div>
+    ${f.error ? `<div class="err">${esc(f.error)}</div>` : ''}</div>`;
+  h += '</main>';
+  h += `<div class="bottombar"><div class="inner"><button class="btn btn-primary" data-act="startGame">Commencer la partie</button></div></div>`;
+  return h;
+}
+function holeNumbers(count, start) { return Array.from({ length: count }, (_, i) => ((start - 1 + i) % 18) + 1); }
+function seqText(f) { const s = holeNumbers(f.count, f.start); return `Trous joués : ${s[0]} → ${s[s.length - 1]}`; }
+
+function viewHole(g) {
+  const u = S.ui;
+  const ci = currentIdx(g);
+  const live = g.status === 'playing' && u.holeIdx === ci;
+  const hole = live ? g.holes[u.holeIdx] : u.draft;
+  if (!hole) { S.ui = { screen: 'card', gameId: g.id }; return viewCard(g); }
+  const n = g.players.length;
+  const t = totals(g, holesView(g));
+  let h;
+  if (live) h = header('<button class="hbtn" data-act="home">‹ Accueil</button>', g.course ? esc(g.course) : 'Partie', '<button class="hbtn right" data-act="openCard" data-id="' + g.id + '">Carte</button>');
+  else h = header('<button class="hbtn" data-act="cancelEdit">‹ Annuler</button>', 'Correction', '');
+  h += '<main>';
+  if (!live) h += `<div class="editbanner">✏️ Correction du trou ${hole.n}. Pensez à enregistrer.</div>`;
+  h += `<div class="holehead"><span class="num">Trou ${hole.n}</span><span class="prog">${u.holeIdx + 1} / ${g.holes.length}</span></div>`;
+  h += `<div class="totals" style="grid-template-columns:repeat(${n},1fr)">`;
+  g.players.forEach((p, i) => {
+    const d = CATS.filter((c) => hole[c.k] === i).length;
+    h += `<div class="tot"><div class="n">${esc(p)}</div><div class="v">${t[i].pts}</div><div class="d">${d ? '+' + d + ' ce trou' : ''}</div></div>`;
+  });
+  h += '</div>';
+  const cols = n === 3 ? 3 : 2;
+  CATS.forEach((c) => {
+    const who = hole[c.k];
+    h += `<div class="point" style="--cat:${c.color}"><div class="ph"><span class="pt">${c.name}</span><span class="hint">${c.hint}</span></div>
+      <div class="choices" style="grid-template-columns:repeat(${cols},1fr)">`;
+    g.players.forEach((p, i) => {
+      h += `<button class="choice ${who === i ? 'sel' : ''}" data-act="pick" data-k="${c.k}" data-i="${i}">${esc(p)}</button>`;
+    });
+    h += `</div><div class="nobody">${who === null ? 'Point non attribué' : 'Toucher à nouveau pour annuler'}</div></div>`;
+  });
+  h += '</main>';
+  const isLast = ci === g.holes.length - 1;
+  h += `<div class="bottombar"><div class="inner">${live
+    ? `<button class="btn btn-primary" data-act="validate">${isLast ? 'Valider et terminer la partie' : `Valider le trou ${hole.n}`}</button>`
+    : `<button class="btn btn-primary" data-act="saveEdit">Enregistrer la correction</button>`}</div></div>`;
+  return h;
+}
+
+function badges(h, i) {
+  const b = CATS.filter((c) => h[c.k] === i).map((c) => `<span class="bd ${c.k}">${c.letter}</span>`).join('');
+  return b || (h.done ? '<span class="muted">·</span>' : '');
+}
+
+function viewCard(g) {
+  const playing = g.status === 'playing';
+  const ci = currentIdx(g);
+  const r = ranking(g);
+  let h = header(`<button class="hbtn" data-act="${playing ? 'resume' : 'home'}">‹ ${playing ? 'Trou' : 'Accueil'}</button>`, 'Carte de score', '');
+  h += '<main>';
+  if (!playing) h += `<div class="winner"><div class="big">${winnerText(g)}</div><div class="small" style="opacity:.85;margin-top:4px">${g.course ? esc(g.course) + ' · ' : ''}${fmtDate(g.created, true)}</div></div>`;
+  else h += `<div class="muted small" style="margin:0 4px 10px">${g.course ? esc(g.course) + ' · ' : ''}${fmtDate(g.created, true)} · partie en cours</div>`;
+  h += `<div class="card" style="padding:6px 14px">`;
+  r.forEach((o) => {
+    h += `<div class="rank"><span class="pos">${rankLabel(o.rank)}</span><span class="nm">${esc(o.n)}</span>
+      <span style="text-align:right"><div class="pts">${o.pts} pt${o.pts > 1 ? 's' : ''}</div><div class="det">${o.a} A · ${o.c} C · ${o.p} P</div></span></div>`;
+  });
+  h += `</div>`;
+  h += `<table class="sc"><thead><tr><th>Trou</th>${g.players.map((p) => `<th>${esc(p)}</th>`).join('')}</tr></thead><tbody>`;
+  g.holes.forEach((ho, idx) => {
+    const cls = playing && idx === ci ? 'cur' : (!ho.done ? 'todo' : '');
+    h += `<tr class="${cls}" data-act="openHole" data-idx="${idx}"><td>${ho.n}</td>${g.players.map((_, i) => `<td>${badges(ho, i)}</td>`).join('')}</tr>`;
+  });
+  const t = totals(g);
+  h += `</tbody><tfoot><tr><td>Tot.</td>${t.map((x) => `<td>${x.pts}</td>`).join('')}</tr></tfoot></table>`;
+  h += `<div class="legend"><span><span class="bd a">A</span> Approche</span><span><span class="bd c">C</span> Chip</span><span><span class="bd p">P</span> Putt</span></div>`;
+  h += `<p class="muted small" style="text-align:center">Touchez un trou joué pour le corriger.</p>`;
+  if (!playing) h += `<button class="link danger" data-act="deleteGame">Supprimer cette partie</button>`;
+  h += '</main>';
+  h += `<div class="bottombar"><div class="inner"><button class="btn btn-primary" data-act="share">📤 Partager la carte</button></div></div>`;
+  return h;
+}
+
+/* ---------- Modale / toast ---------- */
+function confirmBox(msg, okLabel, danger) {
+  return new Promise((resolve) => {
+    const m = document.getElementById('modal');
+    m.innerHTML = `<div class="overlay"><div class="sheet"><p>${msg}</p><div class="btns">
+      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="mOk">${okLabel}</button>
+      <button class="btn btn-secondary" id="mNo">Annuler</button></div></div></div>`;
+    const close = (v) => { m.innerHTML = ''; resolve(v); };
+    m.querySelector('#mOk').onclick = () => close(true);
+    m.querySelector('#mNo').onclick = () => close(false);
+    m.querySelector('.overlay').onclick = (e) => { if (e.target.classList.contains('overlay')) close(false); };
+  });
+}
+let toastTimer;
+function toast(msg) {
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 2200);
+}
+
+/* ---------- Actions ---------- */
+const A = {
+  home: () => go({ screen: 'home' }),
+
+  async newGame() {
+    const g = activeGame();
+    if (g && !(await confirmBox('Une partie est en cours. La supprimer pour en commencer une nouvelle ?', 'Supprimer et recommencer', true))) return;
+    if (g) S.games = S.games.filter((x) => x.id !== g.id);
+    const last = S.last || { players: ['', ''], course: '' };
+    go({ screen: 'setup', form: { players: last.players.length >= 2 ? [...last.players] : ['', ''], course: last.course || '', count: 18, start: 1, error: '' } });
+  },
+  addPlayer() { const f = S.ui.form; if (f.players.length < 4) { f.players.push(''); save(); render(); const ins = document.querySelectorAll('[data-field=player]'); ins[ins.length - 1].focus(); } },
+  removePlayer(el) { const f = S.ui.form; f.players.splice(+el.dataset.i, 1); save(); render(); },
+  setCount(el) { S.ui.form.count = +el.dataset.v; save(); render(); },
+  startGame() {
+    const f = S.ui.form;
+    const names = f.players.map((p, i) => p.trim() || `Joueur ${i + 1}`);
+    const lower = names.map((n) => n.toLowerCase());
+    if (new Set(lower).size !== lower.length) { f.error = 'Deux joueurs ont le même prénom. Ajoutez une initiale pour les distinguer.'; save(); render(); return; }
+    const g = {
+      id: uid(), created: new Date().toISOString(), course: f.course.trim(), players: names, status: 'playing',
+      holes: holeNumbers(f.count, f.start).map((n) => ({ n, a: null, c: null, p: null, done: false }))
+    };
+    S.games.push(g);
+    S.last = { players: names, course: g.course };
+    go({ screen: 'hole', gameId: g.id, holeIdx: 0 });
+  },
+
+  resume() {
+    const g = activeGame() || getGame(S.ui.gameId);
+    if (!g) return A.home();
+    go({ screen: 'hole', gameId: g.id, holeIdx: currentIdx(g) });
+  },
+  async abandon() {
+    const g = activeGame();
+    if (!g || !(await confirmBox('Abandonner et supprimer la partie en cours ?', 'Abandonner la partie', true))) return;
+    S.games = S.games.filter((x) => x.id !== g.id);
+    go({ screen: 'home' });
+  },
+
+  pick(el) {
+    const g = getGame(S.ui.gameId);
+    const live = g.status === 'playing' && S.ui.holeIdx === currentIdx(g);
+    const hole = live ? g.holes[S.ui.holeIdx] : S.ui.draft;
+    const k = el.dataset.k, i = +el.dataset.i;
+    hole[k] = hole[k] === i ? null : i;
+    save(); render();
+  },
+  async validate() {
+    const g = getGame(S.ui.gameId);
+    const hole = g.holes[S.ui.holeIdx];
+    const missing = CATS.filter((c) => hole[c.k] === null).map((c) => c.name);
+    if (missing.length) {
+      const msg = `${missing.length > 1 ? 'Points non attribués' : 'Point non attribué'} : <b>${missing.join(', ')}</b>.<br>Valider le trou ${hole.n} quand même ?`;
+      if (!(await confirmBox(msg, 'Valider quand même'))) return;
+    }
+    hole.done = true;
+    const next = currentIdx(g);
+    if (next === -1) { g.status = 'finished'; go({ screen: 'card', gameId: g.id }); toast('Partie terminée 🎉'); }
+    else { go({ screen: 'hole', gameId: g.id, holeIdx: next }); toast(`Trou ${hole.n} validé ✓`); }
+  },
+
+  openCard(el) { go({ screen: 'card', gameId: el.dataset.id || S.ui.gameId }); },
+  openHole(el) {
+    const g = getGame(S.ui.gameId);
+    const idx = +el.dataset.idx;
+    const ho = g.holes[idx];
+    if (g.status === 'playing' && idx === currentIdx(g)) return go({ screen: 'hole', gameId: g.id, holeIdx: idx });
+    if (!ho.done) return toast('Ce trou n\'a pas encore été joué');
+    go({ screen: 'hole', gameId: g.id, holeIdx: idx, draft: { ...ho } });
+  },
+  saveEdit() {
+    const g = getGame(S.ui.gameId);
+    g.holes[S.ui.holeIdx] = { ...S.ui.draft, done: true };
+    const n = S.ui.draft.n;
+    go({ screen: 'card', gameId: g.id });
+    toast(`Trou ${n} corrigé ✓`);
+  },
+  cancelEdit() { go({ screen: 'card', gameId: S.ui.gameId }); },
+
+  async deleteGame() {
+    const g = getGame(S.ui.gameId);
+    if (!(await confirmBox('Supprimer définitivement cette partie ?', 'Supprimer', true))) return;
+    S.games = S.games.filter((x) => x.id !== g.id);
+    go({ screen: 'home' });
+  },
+  share() { shareCard(getGame(S.ui.gameId)); }
+};
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el || !A[el.dataset.act]) return;
+  A[el.dataset.act](el);
+});
+document.addEventListener('input', (e) => {
+  const el = e.target, f = S.ui.form;
+  if (!f || !el.dataset.field) return;
+  if (el.dataset.field === 'player') f.players[+el.dataset.i] = el.value;
+  else if (el.dataset.field === 'course') f.course = el.value;
+  else if (el.dataset.field === 'start') { f.start = +el.value; const s = document.getElementById('seq'); if (s) s.textContent = seqText(f); }
+  f.error = '';
+  save();
+});
+document.addEventListener('change', (e) => {
+  if (e.target.dataset.field === 'start') e.target.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+/* ---------- Image de la carte de score ---------- */
+function drawCard(g) {
+  const W = 1080, P = 56, n = g.players.length;
+  const F = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
+  const r = ranking(g);
+  const t = totals(g);
+  const bandH = 210, rankRowH = 70, rowH = 56, holeColW = 130;
+  const colW = (W - 2 * P - holeColW) / n;
+  const tableTop = bandH + 40 + r.length * rankRowH + 40;
+  const H = tableTop + rowH * (g.holes.length + 2) + 110;
+
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const fit = (s, maxW) => { if (x.measureText(s).width <= maxW) return s; while (s.length > 1 && x.measureText(s + '…').width > maxW) s = s.slice(0, -1); return s + '…'; };
+
+  x.fillStyle = '#f3f5f2'; x.fillRect(0, 0, W, H);
+  // Bandeau
+  x.fillStyle = '#14532d'; x.fillRect(0, 0, W, bandH);
+  x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = `800 58px ${F}`; x.fillText('Approche · Chip · Putt', W / 2, 78);
+  x.font = `500 32px ${F}`; x.fillStyle = 'rgba(255,255,255,.88)';
+  x.fillText(fit((g.course ? g.course + ' · ' : '') + fmtDate(g.created, true), W - 2 * P), W / 2, 140);
+  x.font = `600 26px ${F}`; x.fillStyle = 'rgba(255,255,255,.7)';
+  x.fillText(`${g.holes.length} trous${g.status === 'playing' ? ' · partie en cours' : ''}`, W / 2, 182);
+
+  // Classement
+  let y = bandH + 40;
+  r.forEach((o) => {
+    x.fillStyle = o.rank === 1 ? '#e7f3eb' : '#fff';
+    roundRect(x, P, y, W - 2 * P, rankRowH - 10, 14); x.fill();
+    x.textAlign = 'left'; x.fillStyle = '#5b6560'; x.font = `800 30px ${F}`;
+    x.fillText(rankLabel(o.rank), P + 24, y + (rankRowH - 10) / 2);
+    x.fillStyle = '#111827'; x.font = `700 34px ${F}`;
+    x.fillText(fit(o.n, 480), P + 110, y + (rankRowH - 10) / 2);
+    x.textAlign = 'right'; x.font = `800 36px ${F}`;
+    x.fillText(`${o.pts} pt${o.pts > 1 ? 's' : ''}`, W - P - 24, y + (rankRowH - 10) / 2);
+    x.font = `600 22px ${F}`; x.fillStyle = '#5b6560';
+    x.fillText(`${o.a} A · ${o.c} C · ${o.p} P`, W - P - 170, y + (rankRowH - 10) / 2);
+    y += rankRowH;
+  });
+
+  // Tableau
+  y = tableTop;
+  x.fillStyle = '#14532d'; x.fillRect(P, y, W - 2 * P, rowH);
+  x.fillStyle = '#fff'; x.font = `700 26px ${F}`; x.textAlign = 'center';
+  x.fillText('Trou', P + holeColW / 2, y + rowH / 2);
+  g.players.forEach((p, i) => x.fillText(fit(p, colW - 16), P + holeColW + colW * (i + 0.5), y + rowH / 2));
+  y += rowH;
+  g.holes.forEach((ho, k) => {
+    x.fillStyle = k % 2 ? '#f7f9f7' : '#fff'; x.fillRect(P, y, W - 2 * P, rowH);
+    x.fillStyle = ho.done ? '#111827' : '#a8b0ab'; x.font = `800 26px ${F}`; x.textAlign = 'center';
+    x.fillText(String(ho.n), P + holeColW / 2, y + rowH / 2);
+    g.players.forEach((_, i) => {
+      const won = CATS.filter((c) => ho[c.k] === i);
+      const cx = P + holeColW + colW * (i + 0.5);
+      const R = 18, gap = 8, tw = won.length * 2 * R + (won.length - 1) * gap;
+      won.forEach((c, j) => {
+        const bx = cx - tw / 2 + R + j * (2 * R + gap);
+        x.fillStyle = c.color; x.beginPath(); x.arc(bx, y + rowH / 2, R, 0, Math.PI * 2); x.fill();
+        x.fillStyle = '#fff'; x.font = `800 20px ${F}`; x.fillText(c.letter, bx, y + rowH / 2 + 1);
+      });
+      if (!won.length && ho.done) { x.fillStyle = '#c4cbc6'; x.font = `700 24px ${F}`; x.fillText('·', cx, y + rowH / 2); }
+    });
+    y += rowH;
+  });
+  x.fillStyle = '#e7f3eb'; x.fillRect(P, y, W - 2 * P, rowH);
+  x.fillStyle = '#14532d'; x.font = `800 28px ${F}`;
+  x.fillText('Total', P + holeColW / 2, y + rowH / 2);
+  t.forEach((v, i) => { x.font = `800 32px ${F}`; x.fillText(String(v.pts), P + holeColW + colW * (i + 0.5), y + rowH / 2); });
+  // Lignes verticales
+  x.strokeStyle = '#e1e6e2'; x.lineWidth = 2;
+  for (let i = 0; i < n; i++) { const lx = P + holeColW + colW * i; x.beginPath(); x.moveTo(lx, tableTop + rowH); x.lineTo(lx, y); x.stroke(); }
+  y += rowH + 50;
+
+  // Légende
+  x.font = `600 24px ${F}`; x.textAlign = 'left';
+  const items = CATS.map((c) => ({ c, label: c.name }));
+  const widths = items.map((it) => 36 + 10 + x.measureText(it.label).width);
+  let lx = (W - (widths.reduce((s, w) => s + w, 0) + 40 * (items.length - 1))) / 2;
+  items.forEach((it, j) => {
+    x.fillStyle = it.c.color; x.beginPath(); x.arc(lx + 18, y, 18, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#fff'; x.font = `800 20px ${F}`; x.textAlign = 'center'; x.fillText(it.c.letter, lx + 18, y + 1);
+    x.fillStyle = '#5b6560'; x.font = `600 24px ${F}`; x.textAlign = 'left'; x.fillText(it.label, lx + 46, y);
+    lx += widths[j] + 40;
+  });
+  return cv;
+}
+function roundRect(x, X, Y, w, h, r) {
+  x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r);
+  x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath();
+}
+function dataURLtoBlob(u) {
+  const bin = atob(u.split(',')[1]);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: 'image/png' });
+}
+async function shareCard(g) {
+  // Tout est synchrone jusqu'à navigator.share pour conserver le « geste utilisateur » exigé par iOS.
+  const url = drawCard(g).toDataURL('image/png');
+  const fname = `approche-chip-putt-${g.created.slice(0, 10)}.png`;
+  let file = null;
+  try { file = new File([dataURLtoBlob(url)], fname, { type: 'image/png' }); } catch (e) {}
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Carte de score – Approche Chip Putt' }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const m = document.getElementById('modal');
+  m.innerHTML = `<div class="overlay"><div class="sheet"><img src="${url}" alt="Carte de score">
+    <p class="small muted" style="font-size:15px">Appui long sur l'image pour l'enregistrer ou la partager.</p>
+    <div class="btns"><a class="btn btn-primary" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="${url}" download="${fname}">Télécharger l'image</a>
+    <button class="btn btn-secondary" id="mNo">Fermer</button></div></div></div>`;
+  m.querySelector('#mNo').onclick = () => { m.innerHTML = ''; };
+}
+
+/* ---------- Démarrage ---------- */
+render();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+</script>
+</body>
+</html>
