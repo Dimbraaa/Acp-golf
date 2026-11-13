@@ -1,16 +1,26 @@
 {
   "name": "Approche Chip Putt",
   "short_name": "ACP Golf",
-  "description": "Carte de score golf : Approche / Chip / Putt et 4-2-0 (la Chouette)",
+  "description": "Tu t'occupes du jeu, je m'occupe du score — carte de score golf : Approche / Chip / Putt et 4-2-0 (la Chouette)",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#14532d",
-  "theme_color": "#14532d",
+  "background_color": "#1F4D3A",
+  "theme_color": "#1F4D3A",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }

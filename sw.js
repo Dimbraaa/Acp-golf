@@ -1,14 +1,15 @@
 // Service worker : met l'app en cache pour un fonctionnement 100 % hors ligne.
 // Après chaque modification des fichiers, incrémenter CACHE (acp-v2, acp-v3…)
 // pour que les téléphones récupèrent la nouvelle version.
-const CACHE = 'acp-v3';
+const CACHE = 'acp-v4';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './apple-touch-icon.png',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './logo.svg'
 ];
 
 self.addEventListener('install', (e) => {

@@ -1,4 +1,6 @@
-# Approche Chip Putt — PWA
+# ACP Golf — Approche Chip Putt
+
+*Tu t'occupes du jeu, je m'occupe du score.*
 
 Carte de score golf, 100 % hors ligne, 9 ou 18 trous. Deux formules au choix à la création de la partie :
 - **Approche / Chip / Putt** (2 à 4 joueurs)
@@ -14,3 +16,6 @@ Après toute modification, incrémenter `CACHE` dans `sw.js` (`acp-v1` → `acp-
 
 ## Données
 Les parties sont stockées localement sur le téléphone (localStorage). Supprimer l'app de l'écran d'accueil efface les données.
+
+## Charte graphique
+Logo, couleurs et typographie : voir [CHARTE.md](CHARTE.md).
