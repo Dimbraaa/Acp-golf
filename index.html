@@ -66,7 +66,31 @@
   .seg button { flex: 1; height: 44px; border: none; border-radius: 9px; background: transparent; font-weight: 700; font-size: 16px; color: var(--muted); }
   .seg button.on { background: #fff; color: var(--green); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
   .err { color: var(--danger); font-weight: 600; margin-top: 10px; }
+  .seg button:disabled { opacity: .4; }
+  .player-row .input.hcp { flex: 0 0 74px; width: 74px; text-align: center; padding: 0 6px; }
 
+  /* 4-2-0 */
+  .holeinfo { color: var(--muted); font-weight: 600; font-size: 14px; margin: -4px 4px 12px; }
+  .sp { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #edf0ee; }
+  .sp:last-child { border-bottom: none; }
+  .sp .spn { flex: 1; min-width: 0; }
+  .sp .nm { font-weight: 700; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sp .sub { font-size: 13px; color: var(--muted); }
+  .stepper { display: flex; align-items: center; gap: 6px; }
+  .stepper button { width: 46px; height: 46px; border-radius: 12px; border: 2px solid var(--line); background: #fff; font-size: 24px; font-weight: 700; color: var(--green2); padding: 0; }
+  .stepper button:active { background: var(--green-soft); }
+  .stepper .val { width: 36px; text-align: center; font-size: 26px; font-weight: 800; }
+  .stepper .xbtn { color: var(--danger); font-size: 20px; margin-left: 4px; }
+  .stepper .xbtn.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .sp.picked .val { color: var(--danger); }
+  .sp.picked .nm { color: var(--muted); }
+  table.s420 td { padding: 6px 2px; line-height: 1.15; }
+  table.s420 th.par, table.s420 td.par { width: 40px; color: var(--muted); font-weight: 600; }
+  table.s420 th.par { color: rgba(255,255,255,.75); }
+  table.s420 .sv { font-size: 17px; font-weight: 800; }
+  table.s420 .sv sup { font-size: 10px; color: var(--muted); margin-left: 1px; }
+  table.s420 .spt { font-size: 11px; color: var(--green2); font-weight: 700; }
+  table.s420 tfoot tr.cumrow td { font-size: 14px; font-weight: 700; background: #f4f8f5; color: var(--muted); }
   /* Écran trou */
   .holehead { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 10px; }
   .holehead .num { font-size: 30px; font-weight: 800; }
@@ -145,6 +169,55 @@ const CATS = [
   { k: 'p', name: 'Putt',     letter: 'P', color: '#15803d', hint: '1er dans le trou' }
 ];
 
+// Parcours connus (par + handicap de trou « si », 1 = trou le plus difficile)
+const COURSES = [
+  { id: 'valcros', name: 'Golf de Valcros', holes: [[5,11],[3,15],[4,3],[3,13],[4,17],[4,1],[3,9],[4,7],[5,5],[3,10],[4,16],[5,12],[5,2],[3,18],[4,8],[4,4],[3,6],[4,14]] },
+  { id: 'valgarde', name: 'Golf de Valgarde', holes: [[4,5],[3,7],[4,15],[3,11],[4,3],[4,1],[3,9],[4,17],[5,13],[3,6],[4,4],[3,18],[4,8],[4,2],[4,10],[4,12],[3,16],[5,14]] },
+  { id: 'barbaroux', name: 'Golf de Barbaroux', holes: [[4,7],[4,9],[5,11],[3,17],[5,1],[4,3],[4,13],[3,15],[4,5],[4,12],[4,16],[5,4],[4,8],[4,14],[3,18],[4,6],[5,2],[3,10]] }
+];
+const courseById = (id) => COURSES.find((c) => c.id === id);
+
+/* ---------- Formule 4-2-0 (3 joueurs) / 6-4-2-0 (4 joueurs) ---------- */
+const PICKED = 'x'; // balle ramassée
+const fmtOf = (g) => g.fmt || 'acp';
+const placePoints = (n) => (n === 4 ? [6, 4, 2, 0] : [4, 2, 0]);
+const fmt420Name = (n) => (n === 4 ? '6-4-2-0' : '4-2-0 (la Chouette)');
+// Coups reçus sur un trou : partie entière de H / 18, plus 1 si SI ≤ (H modulo 18)
+function strokesReceived(H, si) {
+  H = Math.max(0, Math.floor(+H || 0));
+  if (!si) return 0;
+  return Math.floor(H / 18) + (si <= H % 18 ? 1 : 0);
+}
+// Score retenu pour le classement du trou (Infinity = balle ramassée)
+function holeScore(g, hole, i) {
+  const s = hole.s[i];
+  if (s === PICKED || s === null || s === undefined) return Infinity;
+  return g.mode === 'net' ? s - strokesReceived(g.hcp[i], hole.si) : s;
+}
+// Points de chaque joueur sur un trou : les joueurs à égalité se partagent la somme des points de leurs places
+function holePoints(g, hole) {
+  const n = g.players.length;
+  const pp = placePoints(n);
+  const sc = g.players.map((_, i) => holeScore(g, hole, i));
+  const order = sc.map((v, i) => i).sort((a, b) => sc[a] - sc[b] || a - b);
+  const pts = new Array(n).fill(0);
+  let k = 0;
+  while (k < n) {
+    let j = k;
+    while (j + 1 < n && sc[order[j + 1]] === sc[order[k]]) j++;
+    const share = pp.slice(k, j + 1).reduce((s, v) => s + v, 0) / (j - k + 1);
+    for (let m = k; m <= j; m++) pts[order[m]] = share;
+    k = j + 1;
+  }
+  return pts;
+}
+// Score affiché = total cumulé − plus petit total cumulé
+function displayScores(cum) {
+  const min = Math.min(...cum);
+  return cum.map((v) => v - min);
+}
+const fmtLabel = (g) => (fmtOf(g) === '420' ? `${fmt420Name(g.players.length)} · ${g.mode === 'net' ? 'Net' : 'Brut'}` : 'Approche Chip Putt');
+
 let S = load();
 
 function blank() {
@@ -177,14 +250,35 @@ function holesView(g) {
   if (u.draft && u.gameId === g.id) return g.holes.map((h, i) => (i === u.holeIdx ? u.draft : h));
   return g.holes;
 }
+// Trou en cours de saisie : le trou courant de la partie, ou le brouillon d'une correction
+function editableHole(g) {
+  const live = g.status === 'playing' && S.ui.holeIdx === currentIdx(g);
+  return live ? g.holes[S.ui.holeIdx] : S.ui.draft;
+}
 function totals(g, holes) {
   holes = holes || g.holes;
   const t = g.players.map(() => ({ pts: 0, a: 0, c: 0, p: 0 }));
   holes.forEach((h) => CATS.forEach((c) => { if (h[c.k] !== null) { t[h[c.k]].pts++; t[h[c.k]][c.k]++; } }));
   return t;
 }
+// 4-2-0 : cum = points cumulés (brut, sert au contrôle), pts = score affiché (avance sur le dernier)
+function totals420(g, holes) {
+  holes = holes || g.holes;
+  const t = g.players.map(() => ({ cum: 0, strokes: 0, picked: 0, played: 0 }));
+  holes.forEach((h) => {
+    if (!h.done) return;
+    holePoints(g, h).forEach((v, i) => {
+      t[i].cum += v; t[i].played++;
+      if (h.s[i] === PICKED) t[i].picked++; else t[i].strokes += h.s[i];
+    });
+  });
+  const d = displayScores(t.map((x) => x.cum));
+  t.forEach((x, i) => { x.pts = d[i]; });
+  return t;
+}
+const anyTotals = (g, holes) => (fmtOf(g) === '420' ? totals420(g, holes) : totals(g, holes));
 function ranking(g) {
-  const t = totals(g);
+  const t = anyTotals(g);
   const r = g.players.map((n, i) => ({ i, n, ...t[i] })).sort((x, y) => y.pts - x.pts);
   r.forEach((o, k) => { o.rank = k > 0 && o.pts === r[k - 1].pts ? r[k - 1].rank : k + 1; });
   return r;
@@ -207,8 +301,8 @@ function render() {
   if ((u.screen === 'hole' || u.screen === 'card') && !g) { S.ui = { screen: 'home' }; return render(); }
   let html = '';
   if (u.screen === 'setup') html = viewSetup();
-  else if (u.screen === 'hole') html = viewHole(g);
-  else if (u.screen === 'card') html = viewCard(g);
+  else if (u.screen === 'hole') html = fmtOf(g) === '420' ? viewHole420(g) : viewHole(g);
+  else if (u.screen === 'card') html = fmtOf(g) === '420' ? viewCard420(g) : viewCard(g);
   else html = viewHome();
   document.getElementById('app').innerHTML = html;
 }
@@ -239,7 +333,13 @@ function viewHome() {
     <li><b>Chip</b> : une fois toutes les balles sur le green, le plus proche du trou.</li>
     <li><b>Putt</b> : premier joueur à rentrer sa balle.</li></ul>
     <p><b>Ready golf</b> : chacun joue quand il est prêt, mais pour l'Approche et le Putt, c'est le joueur le plus loin du trou avant son coup qui remporte le point s'il réussit.</p>
-    <p>Un joueur peut rafler les 3 points d'un trou. Total des points à la fin.</p></details></div>`;
+    <p>Un joueur peut rafler les 3 points d'un trou. Total des points à la fin.</p></details>
+    <details class="rules"><summary>4-2-0 (la Chouette) · 6-4-2-0</summary>
+    <p>3 joueurs : 4 / 2 / 0 points selon le classement sur le trou (score le plus bas = meilleur). 4 joueurs : 6 / 4 / 2 / 0.</p>
+    <ul><li><b>Égalité</b> : les joueurs à égalité se partagent les points de leurs places (ex. à 3 : 3 / 3 / 0, 4 / 1 / 1, 2 / 2 / 2).</li>
+    <li><b>Balle ramassée</b> (✕) : classé dernier sur le trou.</li>
+    <li><b>Net</b> : chaque joueur reçoit des coups selon son handicap de jeu et le handicap du trou.</li>
+    <li><b>Score</b> : on retire à chacun le total du dernier, qui est donc toujours à 0.</li></ul></details></div>`;
   if (done.length) {
     h += `<div class="section-title">Parties terminées</div><div class="card" style="padding:4px 14px">`;
     done.forEach((x) => {
@@ -247,7 +347,7 @@ function viewHome() {
       const top = r.filter((o) => o.rank === 1);
       h += `<button class="hist" data-act="openCard" data-id="${x.id}"><div class="t">
         <div><b>${x.course ? esc(x.course) : 'Partie'}</b> · <span class="muted">${fmtDate(x.created)}</span></div>
-        <div class="muted small">${top.length === 1 ? '🏆 ' + esc(top[0].n) : '🤝 ' + top.map((o) => esc(o.n)).join(' & ')} — ${top[0].pts} pts · ${x.holes.length} trous</div>
+        <div class="muted small">${top.length === 1 ? '🏆 ' + esc(top[0].n) : '🤝 ' + top.map((o) => esc(o.n)).join(' & ')} — ${top[0].pts} pts · ${x.holes.length} trous · ${esc(fmtLabel(x))}</div>
         </div><span class="chev">›</span></button>`;
     });
     h += '</div>';
@@ -256,19 +356,43 @@ function viewHome() {
   return h;
 }
 
+const minPlayers = (f) => (f.fmt === '420' ? 3 : 2);
 function viewSetup() {
   const f = S.ui.form;
+  // Formulaire enregistré par une ancienne version de l'app
+  if (!f.fmt) f.fmt = 'acp';
+  if (!Array.isArray(f.hcp)) f.hcp = f.players.map(() => '');
+  if (f.courseId === undefined) f.courseId = COURSES[0].id;
+  if (!f.mode) f.mode = 'brut';
+  const is420 = f.fmt === '420';
+  const net = is420 && f.mode === 'net';
   let h = header('<button class="hbtn" data-act="home">‹ Annuler</button>', 'Nouvelle partie', '');
   h += '<main>';
-  h += `<div class="card"><label class="field">Joueurs (2 à 4)</label>`;
+  h += `<div class="card"><label class="field">Formule</label>
+    <div class="seg"><button class="${!is420 ? 'on' : ''}" data-act="setFmt" data-v="acp">Approche Chip Putt</button>
+    <button class="${is420 ? 'on' : ''}" data-act="setFmt" data-v="420">4-2-0</button></div>
+    ${is420 ? `<div class="muted small" style="margin-top:8px">3 joueurs : 4-2-0 (la Chouette) · 4 joueurs : 6-4-2-0</div>` : ''}</div>`;
+  h += `<div class="card"><label class="field">Joueurs (${is420 ? '3 ou 4' : '2 à 4'})${net ? '<span class="muted small" style="float:right;font-weight:600">Handicap de jeu</span>' : ''}</label>`;
   f.players.forEach((p, i) => {
     h += `<div class="player-row"><input class="input" data-field="player" data-i="${i}" value="${esc(p)}" placeholder="Prénom joueur ${i + 1}" autocomplete="off" autocapitalize="words" maxlength="16">
-      ${f.players.length > 2 ? `<button class="icon-btn" data-act="removePlayer" data-i="${i}" aria-label="Retirer">×</button>` : ''}</div>`;
+      ${net ? `<input class="input hcp" data-field="hcp" data-i="${i}" value="${esc(f.hcp[i] ?? '')}" placeholder="Hcp" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="Handicap de jeu joueur ${i + 1}">` : ''}
+      ${f.players.length > minPlayers(f) ? `<button class="icon-btn" data-act="removePlayer" data-i="${i}" aria-label="Retirer">×</button>` : ''}</div>`;
   });
   if (f.players.length < 4) h += `<button class="btn btn-secondary" data-act="addPlayer" style="min-height:46px;font-size:16px">+ Ajouter un joueur</button>`;
   h += `</div>`;
-  h += `<div class="card"><label class="field">Golf (facultatif)</label>
-    <input class="input" data-field="course" value="${esc(f.course)}" placeholder="Ex. Golf de Valgarde" autocomplete="off" maxlength="40"></div>`;
+  if (is420) {
+    h += `<div class="card"><label class="field">Golf</label>
+      <select class="input" data-field="courseId">${COURSES.map((c) => `<option value="${c.id}" ${f.courseId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+      <option value="" ${!f.courseId ? 'selected' : ''}>Autre golf</option></select>
+      ${!f.courseId ? `<input class="input" data-field="course" value="${esc(f.course)}" placeholder="Nom du golf (facultatif)" autocomplete="off" maxlength="40" style="margin-top:8px">` : ''}
+      <label class="field" style="margin-top:16px">Mode de jeu</label>
+      <div class="seg"><button class="${!net ? 'on' : ''}" data-act="setMode" data-v="brut">Brut</button>
+      <button class="${net ? 'on' : ''}" data-act="setMode" data-v="net" ${!f.courseId ? 'disabled' : ''}>Net</button></div>
+      <div class="muted small" style="margin-top:8px">${!f.courseId ? 'Le net nécessite un golf de la liste (handicap de chaque trou).' : net ? 'Chaque joueur reçoit ses coups selon son handicap de jeu et le handicap du trou.' : 'On compare les scores bruts.'}</div></div>`;
+  } else {
+    h += `<div class="card"><label class="field">Golf (facultatif)</label>
+      <input class="input" data-field="course" value="${esc(f.course)}" placeholder="Ex. Golf de Valgarde" autocomplete="off" maxlength="40"></div>`;
+  }
   h += `<div class="card"><label class="field">Nombre de trous</label>
     <div class="seg"><button class="${f.count === 9 ? 'on' : ''}" data-act="setCount" data-v="9">9 trous</button>
     <button class="${f.count === 18 ? 'on' : ''}" data-act="setCount" data-v="18">18 trous</button></div>
@@ -318,6 +442,99 @@ function viewHole(g) {
   h += `<div class="bottombar"><div class="inner">${live
     ? `<button class="btn btn-primary" data-act="validate">${isLast ? 'Valider et terminer la partie' : `Valider le trou ${hole.n}`}</button>`
     : `<button class="btn btn-primary" data-act="saveEdit">Enregistrer la correction</button>`}</div></div>`;
+  return h;
+}
+
+function viewHole420(g) {
+  const u = S.ui;
+  const ci = currentIdx(g);
+  const live = g.status === 'playing' && u.holeIdx === ci;
+  const hole = live ? g.holes[u.holeIdx] : u.draft;
+  if (!hole) { S.ui = { screen: 'card', gameId: g.id }; return viewCard420(g); }
+  const n = g.players.length;
+  const net = g.mode === 'net';
+  const t = totals420(g, holesView(g));
+  const hp = holePoints(g, hole);
+  let h;
+  if (live) h = header('<button class="hbtn" data-act="home">‹ Accueil</button>', g.course ? esc(g.course) : 'Partie', '<button class="hbtn right" data-act="openCard" data-id="' + g.id + '">Carte</button>');
+  else h = header('<button class="hbtn" data-act="cancelEdit">‹ Annuler</button>', 'Correction', '');
+  h += '<main>';
+  if (!live) h += `<div class="editbanner">✏️ Correction du trou ${hole.n}. Pensez à enregistrer.</div>`;
+  h += `<div class="holehead"><span class="num">Trou ${hole.n}</span><span class="prog">${u.holeIdx + 1} / ${g.holes.length}</span></div>`;
+  h += `<div class="holeinfo">${hole.par ? `Par ${hole.par} · Handicap du trou ${hole.si} · ` : ''}${esc(fmtLabel(g))}</div>`;
+  h += `<div class="totals" style="grid-template-columns:repeat(${n},1fr)">`;
+  g.players.forEach((p, i) => {
+    h += `<div class="tot"><div class="n">${esc(p)}</div><div class="v">${t[i].pts}</div><div class="d">${live ? '+' + hp[i] + ' ce trou' : ''}</div></div>`;
+  });
+  h += '</div>';
+  h += '<div class="card" style="padding:4px 12px">';
+  g.players.forEach((p, i) => {
+    const s = hole.s[i];
+    const picked = s === PICKED;
+    const rec = net ? strokesReceived(g.hcp[i], hole.si) : 0;
+    const sub = [`${hp[i]} pt${hp[i] > 1 ? 's' : ''}`];
+    if (net) sub.push(rec ? `reçoit ${rec} coup${rec > 1 ? 's' : ''}` : 'ne reçoit pas de coup');
+    if (net && !picked && rec) sub.push(`net ${s - rec}`);
+    h += `<div class="sp ${picked ? 'picked' : ''}"><div class="spn"><div class="nm">${esc(p)}</div><div class="sub">${sub.join(' · ')}</div></div>
+      <div class="stepper"><button data-act="step" data-i="${i}" data-d="-1" aria-label="Un coup de moins">−</button>
+      <span class="val">${picked ? '✕' : s}</span>
+      <button data-act="step" data-i="${i}" data-d="1" aria-label="Un coup de plus">+</button>
+      <button class="xbtn ${picked ? 'on' : ''}" data-act="pickUp" data-i="${i}" aria-label="Balle ramassée">✕</button></div></div>`;
+  });
+  h += '</div><p class="muted small" style="text-align:center;margin-top:-4px">✕ = balle ramassée (classé dernier sur le trou)</p>';
+  h += '</main>';
+  const isLast = ci === g.holes.length - 1;
+  h += `<div class="bottombar"><div class="inner">${live
+    ? `<button class="btn btn-primary" data-act="validate">${isLast ? 'Valider et terminer la partie' : `Valider le trou ${hole.n}`}</button>`
+    : `<button class="btn btn-primary" data-act="saveEdit">Enregistrer la correction</button>`}</div></div>`;
+  return h;
+}
+
+function cell420(g, ho, i) {
+  if (!ho.done) return '';
+  const s = ho.s[i];
+  const rec = g.mode === 'net' ? strokesReceived(g.hcp[i], ho.si) : 0;
+  const pts = holePoints(g, ho)[i];
+  return `<div class="sv">${s === PICKED ? '<span style="color:var(--danger)">✕</span>' : s}${rec ? `<sup>${'•'.repeat(Math.min(rec, 3))}</sup>` : ''}</div><div class="spt">${pts} pt${pts > 1 ? 's' : ''}</div>`;
+}
+
+function viewCard420(g) {
+  const playing = g.status === 'playing';
+  const ci = currentIdx(g);
+  const r = ranking(g);
+  const t = totals420(g);
+  const hasPar = g.holes.some((x) => x.par);
+  const doneHoles = g.holes.filter((x) => x.done).length;
+  const sumCum = t.reduce((s, x) => s + x.cum, 0);
+  const per = placePoints(g.players.length).reduce((s, v) => s + v, 0);
+  let h = header(`<button class="hbtn" data-act="${playing ? 'resume' : 'home'}">‹ ${playing ? 'Trou' : 'Accueil'}</button>`, 'Carte de score', '');
+  h += '<main>';
+  const sub = `${g.course ? esc(g.course) + ' · ' : ''}${fmtDate(g.created, true)}`;
+  if (!playing) h += `<div class="winner"><div class="big">${winnerText(g)}</div><div class="small" style="opacity:.85;margin-top:4px">${esc(fmtLabel(g))}<br>${sub}</div></div>`;
+  else h += `<div class="muted small" style="margin:0 4px 10px">${esc(fmtLabel(g))} · ${sub} · partie en cours</div>`;
+  h += `<div class="card" style="padding:6px 14px">`;
+  r.forEach((o) => {
+    const det = [`${o.cum} pts cumulés`];
+    if (o.played) det.push(`${o.strokes} coup${o.strokes > 1 ? 's' : ''}${o.picked ? ' + ' + o.picked + ' ✕' : ''}`);
+    if (g.mode === 'net') det.push(`hcp ${g.hcp[o.i]}`);
+    h += `<div class="rank"><span class="pos">${rankLabel(o.rank)}</span><span class="nm">${esc(o.n)}</span>
+      <span style="text-align:right"><div class="pts">${o.pts} pt${o.pts > 1 ? 's' : ''}</div><div class="det">${det.join(' · ')}</div></span></div>`;
+  });
+  h += `</div>`;
+  h += `<table class="sc s420"><thead><tr><th>Trou</th>${hasPar ? '<th class="par">Par</th>' : ''}${g.players.map((p) => `<th>${esc(p)}</th>`).join('')}</tr></thead><tbody>`;
+  g.holes.forEach((ho, idx) => {
+    const cls = playing && idx === ci ? 'cur' : (!ho.done ? 'todo' : '');
+    h += `<tr class="${cls}" data-act="openHole" data-idx="${idx}"><td>${ho.n}</td>${hasPar ? `<td class="par">${ho.par || ''}</td>` : ''}${g.players.map((_, i) => `<td>${cell420(g, ho, i)}</td>`).join('')}</tr>`;
+  });
+  const pad = hasPar ? '<td class="par"></td>' : '';
+  h += `</tbody><tfoot><tr class="cumrow"><td>Pts</td>${pad}${t.map((x) => `<td>${x.cum}</td>`).join('')}</tr>
+    <tr><td>Score</td>${pad}${t.map((x) => `<td>${x.pts}</td>`).join('')}</tr></tfoot></table>`;
+  h += `<p class="muted small" style="text-align:center;margin-bottom:2px">Score = points cumulés − ceux du dernier.${g.mode === 'net' ? ' • = coup reçu.' : ''} ✕ = balle ramassée.</p>`;
+  if (doneHoles) h += `<p class="small" style="text-align:center;margin-top:2px;color:${sumCum === per * doneHoles ? 'var(--green2)' : 'var(--danger)'}">Contrôle : ${sumCum} points distribués sur ${doneHoles} trou${doneHoles > 1 ? 's' : ''} (${per} par trou) ${sumCum === per * doneHoles ? '✓' : '⚠️'}</p>`;
+  h += `<p class="muted small" style="text-align:center">Touchez un trou joué pour le corriger.</p>`;
+  if (!playing) h += `<button class="link danger" data-act="deleteGame">Supprimer cette partie</button>`;
+  h += '</main>';
+  h += `<div class="bottombar"><div class="inner"><button class="btn btn-primary" data-act="share">📤 Partager la carte</button></div></div>`;
   return h;
 }
 
@@ -386,23 +603,81 @@ const A = {
     if (g && !(await confirmBox('Une partie est en cours. La supprimer pour en commencer une nouvelle ?', 'Supprimer et recommencer', true))) return;
     if (g) S.games = S.games.filter((x) => x.id !== g.id);
     const last = S.last || { players: ['', ''], course: '' };
-    go({ screen: 'setup', form: { players: last.players.length >= 2 ? [...last.players] : ['', ''], course: last.course || '', count: 18, start: 1, error: '' } });
+    const players = last.players && last.players.length >= 2 ? [...last.players] : ['', ''];
+    const hcp = players.map((_, i) => (last.hcp && last.hcp[i] != null ? String(last.hcp[i]) : ''));
+    go({ screen: 'setup', form: {
+      fmt: last.fmt || 'acp', players, hcp, course: last.course || '',
+      courseId: last.courseId !== undefined ? last.courseId : COURSES[0].id, mode: last.mode || 'brut',
+      count: 18, start: 1, error: ''
+    } });
   },
-  addPlayer() { const f = S.ui.form; if (f.players.length < 4) { f.players.push(''); save(); render(); const ins = document.querySelectorAll('[data-field=player]'); ins[ins.length - 1].focus(); } },
-  removePlayer(el) { const f = S.ui.form; f.players.splice(+el.dataset.i, 1); save(); render(); },
+  addPlayer() {
+    const f = S.ui.form;
+    if (f.players.length >= 4) return;
+    f.players.push(''); f.hcp.push(''); f.error = ''; save(); render();
+    const ins = document.querySelectorAll('[data-field=player]'); ins[ins.length - 1].focus();
+  },
+  removePlayer(el) { const f = S.ui.form; f.players.splice(+el.dataset.i, 1); f.hcp.splice(+el.dataset.i, 1); f.error = ''; save(); render(); },
   setCount(el) { S.ui.form.count = +el.dataset.v; save(); render(); },
+  setFmt(el) {
+    const f = S.ui.form;
+    f.fmt = el.dataset.v; f.error = '';
+    while (f.players.length < minPlayers(f)) { f.players.push(''); f.hcp.push(''); }
+    save(); render();
+  },
+  setMode(el) { const f = S.ui.form; if (el.dataset.v === 'net' && !f.courseId) return; f.mode = el.dataset.v; f.error = ''; save(); render(); },
   startGame() {
     const f = S.ui.form;
+    const is420 = f.fmt === '420';
+    const fail = (msg) => { f.error = msg; save(); render(); };
     const names = f.players.map((p, i) => p.trim() || `Joueur ${i + 1}`);
     const lower = names.map((n) => n.toLowerCase());
-    if (new Set(lower).size !== lower.length) { f.error = 'Deux joueurs ont le même prénom. Ajoutez une initiale pour les distinguer.'; save(); render(); return; }
-    const g = {
-      id: uid(), created: new Date().toISOString(), course: f.course.trim(), players: names, status: 'playing',
-      holes: holeNumbers(f.count, f.start).map((n) => ({ n, a: null, c: null, p: null, done: false }))
-    };
+    if (new Set(lower).size !== lower.length) return fail('Deux joueurs ont le même prénom. Ajoutez une initiale pour les distinguer.');
+    const holeNums = holeNumbers(f.count, f.start);
+    let g;
+    if (!is420) {
+      g = {
+        id: uid(), created: new Date().toISOString(), fmt: 'acp', course: f.course.trim(), players: names, status: 'playing',
+        holes: holeNums.map((n) => ({ n, a: null, c: null, p: null, done: false }))
+      };
+    } else {
+      if (names.length < 3) return fail('Le 4-2-0 se joue à 3 ou 4 joueurs.');
+      const course = courseById(f.courseId);
+      const mode = course && f.mode === 'net' ? 'net' : 'brut';
+      let hcp = names.map(() => 0);
+      if (mode === 'net') {
+        hcp = f.hcp.map((v) => String(v ?? '').trim());
+        if (hcp.some((v) => !/^\d{1,2}$/.test(v) || +v > 54)) return fail('Indiquez le handicap de jeu de chaque joueur (nombre entier de 0 à 54).');
+        hcp = hcp.map(Number);
+      }
+      g = {
+        id: uid(), created: new Date().toISOString(), fmt: '420', mode, courseId: course ? course.id : '',
+        course: course ? course.name : f.course.trim(), players: names, hcp, status: 'playing',
+        holes: holeNums.map((n) => {
+          const par = course ? course.holes[n - 1][0] : null;
+          const si = course ? course.holes[n - 1][1] : null;
+          return { n, par, si, s: names.map(() => par || 4), done: false };
+        })
+      };
+    }
     S.games.push(g);
-    S.last = { players: names, course: g.course };
+    S.last = { players: names, course: f.course.trim(), fmt: f.fmt, courseId: f.courseId, mode: f.mode, hcp: f.hcp.map((v) => String(v ?? '').trim()) };
     go({ screen: 'hole', gameId: g.id, holeIdx: 0 });
+  },
+  step(el) {
+    const g = getGame(S.ui.gameId);
+    const hole = editableHole(g);
+    const i = +el.dataset.i, d = +el.dataset.d;
+    const s = hole.s[i];
+    hole.s[i] = s === PICKED ? (hole.par || 4) : Math.min(15, Math.max(1, s + d));
+    save(); render();
+  },
+  pickUp(el) {
+    const g = getGame(S.ui.gameId);
+    const hole = editableHole(g);
+    const i = +el.dataset.i;
+    hole.s[i] = hole.s[i] === PICKED ? (hole.par || 4) : PICKED;
+    save(); render();
   },
 
   resume() {
@@ -419,8 +694,7 @@ const A = {
 
   pick(el) {
     const g = getGame(S.ui.gameId);
-    const live = g.status === 'playing' && S.ui.holeIdx === currentIdx(g);
-    const hole = live ? g.holes[S.ui.holeIdx] : S.ui.draft;
+    const hole = editableHole(g);
     const k = el.dataset.k, i = +el.dataset.i;
     hole[k] = hole[k] === i ? null : i;
     save(); render();
@@ -428,7 +702,7 @@ const A = {
   async validate() {
     const g = getGame(S.ui.gameId);
     const hole = g.holes[S.ui.holeIdx];
-    const missing = CATS.filter((c) => hole[c.k] === null).map((c) => c.name);
+    const missing = fmtOf(g) === '420' ? [] : CATS.filter((c) => hole[c.k] === null).map((c) => c.name);
     if (missing.length) {
       const msg = `${missing.length > 1 ? 'Points non attribués' : 'Point non attribué'} : <b>${missing.join(', ')}</b>.<br>Valider le trou ${hole.n} quand même ?`;
       if (!(await confirmBox(msg, 'Valider quand même'))) return;
@@ -446,7 +720,7 @@ const A = {
     const ho = g.holes[idx];
     if (g.status === 'playing' && idx === currentIdx(g)) return go({ screen: 'hole', gameId: g.id, holeIdx: idx });
     if (!ho.done) return toast('Ce trou n\'a pas encore été joué');
-    go({ screen: 'hole', gameId: g.id, holeIdx: idx, draft: { ...ho } });
+    go({ screen: 'hole', gameId: g.id, holeIdx: idx, draft: JSON.parse(JSON.stringify(ho)) });
   },
   saveEdit() {
     const g = getGame(S.ui.gameId);
@@ -476,21 +750,30 @@ document.addEventListener('input', (e) => {
   if (!f || !el.dataset.field) return;
   if (el.dataset.field === 'player') f.players[+el.dataset.i] = el.value;
   else if (el.dataset.field === 'course') f.course = el.value;
+  else if (el.dataset.field === 'hcp') f.hcp[+el.dataset.i] = el.value.replace(/\D/g, '');
+  else if (el.dataset.field === 'courseId') {
+    if (f.courseId === el.value) return;
+    f.courseId = el.value;
+    if (!f.courseId) f.mode = 'brut';
+    f.error = ''; save(); render(); return;
+  }
   else if (el.dataset.field === 'start') { f.start = +el.value; const s = document.getElementById('seq'); if (s) s.textContent = seqText(f); }
   f.error = '';
   save();
 });
 document.addEventListener('change', (e) => {
-  if (e.target.dataset.field === 'start') e.target.dispatchEvent(new Event('input', { bubbles: true }));
+  const fld = e.target.dataset.field;
+  if (fld === 'start' || fld === 'courseId') e.target.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 /* ---------- Image de la carte de score ---------- */
 function drawCard(g) {
   const W = 1080, P = 56, n = g.players.length;
   const F = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
+  const is420 = fmtOf(g) === '420';
   const r = ranking(g);
-  const t = totals(g);
-  const bandH = 210, rankRowH = 70, rowH = 56, holeColW = 130;
+  const t = anyTotals(g);
+  const bandH = 210, rankRowH = 70, rowH = is420 ? 66 : 56, holeColW = 130;
   const colW = (W - 2 * P - holeColW) / n;
   const tableTop = bandH + 40 + r.length * rankRowH + 40;
   const H = tableTop + rowH * (g.holes.length + 2) + 110;
@@ -504,7 +787,7 @@ function drawCard(g) {
   // Bandeau
   x.fillStyle = '#14532d'; x.fillRect(0, 0, W, bandH);
   x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.font = `800 58px ${F}`; x.fillText('Approche · Chip · Putt', W / 2, 78);
+  x.font = `800 58px ${F}`; x.fillText(is420 ? fmtLabel(g).replace(' (la Chouette)', ' · la Chouette') : 'Approche · Chip · Putt', W / 2, 78);
   x.font = `500 32px ${F}`; x.fillStyle = 'rgba(255,255,255,.88)';
   x.fillText(fit((g.course ? g.course + ' · ' : '') + fmtDate(g.created, true), W - 2 * P), W / 2, 140);
   x.font = `600 26px ${F}`; x.fillStyle = 'rgba(255,255,255,.7)';
@@ -522,7 +805,7 @@ function drawCard(g) {
     x.textAlign = 'right'; x.font = `800 36px ${F}`;
     x.fillText(`${o.pts} pt${o.pts > 1 ? 's' : ''}`, W - P - 24, y + (rankRowH - 10) / 2);
     x.font = `600 22px ${F}`; x.fillStyle = '#5b6560';
-    x.fillText(`${o.a} A · ${o.c} C · ${o.p} P`, W - P - 170, y + (rankRowH - 10) / 2);
+    x.fillText(is420 ? `${o.cum} pts cumulés` : `${o.a} A · ${o.c} C · ${o.p} P`, W - P - 170, y + (rankRowH - 10) / 2);
     y += rankRowH;
   });
 
@@ -536,7 +819,26 @@ function drawCard(g) {
   g.holes.forEach((ho, k) => {
     x.fillStyle = k % 2 ? '#f7f9f7' : '#fff'; x.fillRect(P, y, W - 2 * P, rowH);
     x.fillStyle = ho.done ? '#111827' : '#a8b0ab'; x.font = `800 26px ${F}`; x.textAlign = 'center';
-    x.fillText(String(ho.n), P + holeColW / 2, y + rowH / 2);
+    x.fillText(String(ho.n), P + holeColW / 2, y + rowH / 2 - (is420 && ho.par ? 9 : 0));
+    if (is420) {
+      x.font = `600 18px ${F}`; x.fillStyle = '#5b6560';
+      if (ho.par) x.fillText(`par ${ho.par}`, P + holeColW / 2, y + rowH / 2 + 19);
+      x.font = `800 26px ${F}`;
+      if (ho.done) {
+        const hp = holePoints(g, ho);
+        g.players.forEach((_, i) => {
+          const cx = P + holeColW + colW * (i + 0.5);
+          const s = ho.s[i];
+          const rec = g.mode === 'net' ? strokesReceived(g.hcp[i], ho.si) : 0;
+          x.font = `800 28px ${F}`; x.fillStyle = s === PICKED ? '#b91c1c' : '#111827';
+          x.fillText((s === PICKED ? '✕' : String(s)) + (rec ? ' ' + '•'.repeat(Math.min(rec, 3)) : ''), cx, y + rowH / 2 - 9);
+          x.font = `700 19px ${F}`; x.fillStyle = '#166534';
+          x.fillText(`${hp[i]} pt${hp[i] > 1 ? 's' : ''}`, cx, y + rowH / 2 + 19);
+        });
+      }
+      y += rowH;
+      return;
+    }
     g.players.forEach((_, i) => {
       const won = CATS.filter((c) => ho[c.k] === i);
       const cx = P + holeColW + colW * (i + 0.5);
@@ -552,7 +854,7 @@ function drawCard(g) {
   });
   x.fillStyle = '#e7f3eb'; x.fillRect(P, y, W - 2 * P, rowH);
   x.fillStyle = '#14532d'; x.font = `800 28px ${F}`;
-  x.fillText('Total', P + holeColW / 2, y + rowH / 2);
+  x.fillText(is420 ? 'Score' : 'Total', P + holeColW / 2, y + rowH / 2);
   t.forEach((v, i) => { x.font = `800 32px ${F}`; x.fillText(String(v.pts), P + holeColW + colW * (i + 0.5), y + rowH / 2); });
   // Lignes verticales
   x.strokeStyle = '#e1e6e2'; x.lineWidth = 2;
@@ -560,6 +862,11 @@ function drawCard(g) {
   y += rowH + 50;
 
   // Légende
+  if (is420) {
+    x.font = `600 24px ${F}`; x.textAlign = 'center'; x.fillStyle = '#5b6560';
+    x.fillText(`Score = points cumulés − ceux du dernier · ✕ = balle ramassée${g.mode === 'net' ? ' · • = coup reçu' : ''}`, W / 2, y, W - 2 * P);
+    return cv;
+  }
   x.font = `600 24px ${F}`; x.textAlign = 'left';
   const items = CATS.map((c) => ({ c, label: c.name }));
   const widths = items.map((it) => 36 + 10 + x.measureText(it.label).width);
@@ -585,11 +892,11 @@ function dataURLtoBlob(u) {
 async function shareCard(g) {
   // Tout est synchrone jusqu'à navigator.share pour conserver le « geste utilisateur » exigé par iOS.
   const url = drawCard(g).toDataURL('image/png');
-  const fname = `approche-chip-putt-${g.created.slice(0, 10)}.png`;
+  const fname = `${fmtOf(g) === '420' ? '4-2-0' : 'approche-chip-putt'}-${g.created.slice(0, 10)}.png`;
   let file = null;
   try { file = new File([dataURLtoBlob(url)], fname, { type: 'image/png' }); } catch (e) {}
   if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: 'Carte de score – Approche Chip Putt' }); return; }
+    try { await navigator.share({ files: [file], title: 'Carte de score – ' + fmtLabel(g) }); return; }
     catch (e) { if (e.name === 'AbortError') return; }
   }
   const m = document.getElementById('modal');

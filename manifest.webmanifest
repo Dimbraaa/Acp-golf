@@ -1,7 +1,7 @@
 {
   "name": "Approche Chip Putt",
   "short_name": "ACP Golf",
-  "description": "Suivi des points Approche / Chip / Putt au golf",
+  "description": "Carte de score golf : Approche / Chip / Putt et 4-2-0 (la Chouette)",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
