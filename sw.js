@@ -1,7 +1,7 @@
 // Service worker : met l'app en cache pour un fonctionnement 100 % hors ligne.
 // Après chaque modification des fichiers, incrémenter CACHE (acp-v2, acp-v3…)
 // pour que les téléphones récupèrent la nouvelle version.
-const CACHE = 'acp-v5';
+const CACHE = 'acp-v6';
 const ASSETS = [
   './',
   './index.html',

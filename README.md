@@ -2,9 +2,12 @@
 
 *Tu t'occupes du jeu, je m'occupe du score.*
 
-Carte de score golf, 100 % hors ligne, 9 ou 18 trous. Deux formules au choix à la création de la partie :
+Carte de score golf, 100 % hors ligne, 9 ou 18 trous. Trois formules au choix à la création de la partie :
 - **Approche / Chip / Putt** (2 à 4 joueurs)
-- **4-2-0 (la Chouette)** à 3 joueurs, **6-4-2-0** à 4 joueurs, en brut ou en net. Le net utilise les parcours intégrés (Valcros, Valgarde, Barbaroux) ; « Autre golf » se joue en brut.
+- **4-2-0 (la Chouette)** à 3 joueurs, **6-4-2-0** à 4 joueurs, en brut ou en net.
+- **Wolf** (4 joueurs, règles par défaut sans variante), en brut ou en net : sur chaque trou, le Loup joue avec un partenaire (2 pts chacun s'ils gagnent, 3 pts pour chaque adversaire s'ils perdent), en Loup solitaire (4 pts / 1 pt pour chacun des autres) ou en Loup aveugle (le double). Rotation du Loup sur 16 trous (8 sur 9 trous), puis le dernier au classement est le Loup.
+
+Le net utilise les parcours intégrés (Valcros, Valgarde, Barbaroux) ; « Autre golf » se joue en brut.
 
 ## Installer sur l'iPhone
 1. Ouvrir l'URL dans **Safari** (avec du réseau, une fois).

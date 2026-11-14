@@ -90,6 +90,13 @@
   table.s420 .sv { font-size: 17px; font-weight: 800; }
   table.s420 .sv sup { font-size: 10px; color: var(--muted); margin-left: 1px; }
   table.s420 .spt { font-size: 11px; color: var(--green2); font-weight: 700; }
+  table.s420 td.wt { background: #FBF1DC; }
+  table.sc tr.cur td.wt { background: #F5E2B8; }
+  .seg button { line-height: 1.1; padding: 0 4px; }
+  /* Wolf */
+  .wolfres { border-radius: 12px; padding: 10px 12px; margin: -4px 0 12px; font-weight: 700; font-size: 15px; text-align: center; background: var(--green-soft); color: var(--green); }
+  .wolfres.none { background: #FBF1DC; color: #7A5310; }
+  .wolfres.tie { background: #EFECE4; color: var(--muted); }
   table.s420 tfoot tr.cumrow td { font-size: 14px; font-weight: 700; background: #F1F5F2; color: var(--muted); }
   /* Écran trou */
   .holehead { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 10px; }
@@ -248,7 +255,70 @@ function displayScores(cum) {
   const min = Math.min(...cum);
   return cum.map((v) => v - min);
 }
-const fmtLabel = (g) => (fmtOf(g) === '420' ? `${fmt420Name(g.players.length)} · ${g.mode === 'net' ? 'Net' : 'Brut'}` : 'Approche Chip Putt');
+/* ---------- Formule Wolf (4 joueurs, règles par défaut) ---------- */
+// Trous joués en rotation : 16 sur 18, 8 sur 9. Ensuite, le Loup est le dernier au classement.
+const wolfRotation = (g) => g.holes.length - (g.holes.length % 4);
+// Loup du trou d'indice idx : figé à la validation (hole.wolf), sinon rotation ou dernier au classement
+function wolfOf(g, idx, hole) {
+  hole = hole || g.holes[idx];
+  if (hole.wolf !== null && hole.wolf !== undefined) return hole.wolf;
+  if (idx < wolfRotation(g)) return idx % 4;
+  return wolfLastPlace(g, idx);
+}
+// Dernier au classement avant le trou idx (égalité : premier dans l'ordre de départ)
+function wolfLastPlace(g, idx) {
+  const cum = g.players.map(() => 0);
+  g.holes.slice(0, idx).forEach((h, k) => {
+    if (h.done) wolfResult(g, h, wolfOf(g, k, h)).pts.forEach((v, i) => { cum[i] += v; });
+  });
+  let m = 0;
+  cum.forEach((v, i) => { if (v < cum[m]) m = i; });
+  return m;
+}
+// Choix du Loup (hole.team) : numéro du partenaire, 'lone' (solitaire), 'blind' (aveugle) ou null (pas encore choisi)
+function wolfSides(hole, w) {
+  const mine = typeof hole.team === 'number' ? [w, hole.team] : [w];
+  return { mine, others: [0, 1, 2, 3].filter((i) => !mine.includes(i)) };
+}
+// Barème : [points de chaque gagnant côté Loup, points de chaque gagnant côté adversaires]
+const wolfTable = (team) => (typeof team === 'number' ? [2, 3] : team === 'lone' ? [4, 1] : [8, 2]);
+function wolfResult(g, hole, w) {
+  const pts = g.players.map(() => 0);
+  if (hole.team === null || hole.team === undefined || hole.team === w) return { pts, res: null };
+  const { mine, others } = wolfSides(hole, w);
+  const best = (arr) => Math.min(...arr.map((i) => holeScore(g, hole, i)));
+  const a = best(mine), b = best(others);
+  if (a === b) return { pts, res: 'tie', a, b };  // y compris +∞ contre +∞
+  const tbl = wolfTable(hole.team);
+  if (a < b) mine.forEach((i) => { pts[i] = tbl[0]; });
+  else others.forEach((i) => { pts[i] = tbl[1]; });
+  return { pts, res: a < b ? 'wolf' : 'others', a, b };
+}
+function totalsWolf(g, holes) {
+  holes = holes || g.holes;
+  const t = g.players.map(() => ({ cum: 0, strokes: 0, picked: 0, played: 0, wolf: 0 }));
+  holes.forEach((h, k) => {
+    if (!h.done) return;
+    const w = wolfOf(g, k, h);
+    t[w].wolf++;
+    wolfResult(g, h, w).pts.forEach((v, i) => {
+      t[i].cum += v; t[i].played++;
+      if (h.s[i] === PICKED) t[i].picked++; else t[i].strokes += h.s[i];
+    });
+  });
+  t.forEach((x) => { x.pts = x.cum; });
+  return t;
+}
+// Points d'un trou joué, pour les formules avec scores (4-2-0 ou Wolf)
+const scoredHolePoints = (g, ho, idx) => (fmtOf(g) === 'wolf' ? wolfResult(g, ho, wolfOf(g, idx, ho)).pts : holePoints(g, ho));
+
+const modeLabel = (g) => (g.mode === 'net' ? 'Net' : 'Brut');
+function fmtLabel(g) {
+  const f = fmtOf(g);
+  if (f === '420') return `${fmt420Name(g.players.length)} · ${modeLabel(g)}`;
+  if (f === 'wolf') return `Wolf · ${modeLabel(g)}`;
+  return 'Approche Chip Putt';
+}
 
 let S = load();
 
@@ -308,7 +378,12 @@ function totals420(g, holes) {
   t.forEach((x, i) => { x.pts = d[i]; });
   return t;
 }
-const anyTotals = (g, holes) => (fmtOf(g) === '420' ? totals420(g, holes) : totals(g, holes));
+function anyTotals(g, holes) {
+  const f = fmtOf(g);
+  if (f === '420') return totals420(g, holes);
+  if (f === 'wolf') return totalsWolf(g, holes);
+  return totals(g, holes);
+}
 function ranking(g) {
   const t = anyTotals(g);
   const r = g.players.map((n, i) => ({ i, n, ...t[i] })).sort((x, y) => y.pts - x.pts);
@@ -332,9 +407,10 @@ function render() {
   let g = u.gameId ? getGame(u.gameId) : null;
   if ((u.screen === 'hole' || u.screen === 'card') && !g) { S.ui = { screen: 'home' }; return render(); }
   let html = '';
+  const f = g ? fmtOf(g) : '';
   if (u.screen === 'setup') html = viewSetup();
-  else if (u.screen === 'hole') html = fmtOf(g) === '420' ? viewHole420(g) : viewHole(g);
-  else if (u.screen === 'card') html = fmtOf(g) === '420' ? viewCard420(g) : viewCard(g);
+  else if (u.screen === 'hole') html = f === '420' ? viewHole420(g) : f === 'wolf' ? viewHoleWolf(g) : viewHole(g);
+  else if (u.screen === 'card') html = f === '420' ? viewCard420(g) : f === 'wolf' ? viewCardWolf(g) : viewCard(g);
   else html = viewHome();
   document.getElementById('app').innerHTML = html;
 }
@@ -371,7 +447,16 @@ function viewHome() {
     <ul><li><b>Égalité</b> : les joueurs à égalité se partagent les points de leurs places (ex. à 3 : 3 / 3 / 0, 4 / 1 / 1, 2 / 2 / 2).</li>
     <li><b>Balle ramassée</b> (✕) : classé dernier sur le trou.</li>
     <li><b>Net</b> : chaque joueur reçoit des coups selon son handicap de jeu et le handicap du trou.</li>
-    <li><b>Score</b> : on retire à chacun le total du dernier, qui est donc toujours à 0.</li></ul></details></div>`;
+    <li><b>Score</b> : on retire à chacun le total du dernier, qui est donc toujours à 0.</li></ul></details>
+    <details class="rules"><summary>Wolf (4 joueurs)</summary>
+    <p>Sur chaque trou, un joueur est le <b>Loup</b> 🐺. Il tape son départ en premier, puis choisit un partenaire pour jouer à 2 contre 2, ou joue seul contre les 3 autres. Chaque camp compte son meilleur score sur le trou (le plus bas).</p>
+    <ul><li><b>Qui est le Loup</b> : chacun son tour, dans l'ordre des joueurs. Sur les 2 derniers trous (le dernier sur 9 trous), c'est le dernier au classement.</li>
+    <li><b>Partenaire</b> : après chaque départ, le Loup prend ce joueur ou le refuse tout de suite. Un joueur refusé ne peut plus être choisi. Si le Loup et son partenaire gagnent : 2 pts chacun. S'ils perdent : 3 pts pour chacun des 2 autres.</li>
+    <li><b>Loup solitaire</b> (décidé après les départs) : 4 pts s'il gagne. S'il perd : 1 pt pour chacun des 3 autres.</li>
+    <li><b>Loup aveugle</b> (annoncé avant son propre départ) : le double, 8 pts s'il gagne, 2 pts pour chacun des 3 autres s'il perd.</li>
+    <li><b>Égalité</b> : personne ne marque.</li>
+    <li><b>Balle ramassée</b> (✕) : le partenaire peut encore faire gagner l'équipe.</li>
+    <li><b>Net</b> : coups reçus comme au 4-2-0. <b>Score</b> : total des points.</li></ul></details></div>`;
   if (done.length) {
     h += `<div class="section-title">Parties terminées</div><div class="card" style="padding:4px 14px">`;
     done.forEach((x) => {
@@ -388,7 +473,8 @@ function viewHome() {
   return h;
 }
 
-const minPlayers = (f) => (f.fmt === '420' ? 3 : 2);
+const minPlayers = (f) => (f.fmt === 'wolf' ? 4 : f.fmt === '420' ? 3 : 2);
+const playersHint = { acp: '2 à 4', 420: '3 ou 4', wolf: '4' };
 function viewSetup() {
   const f = S.ui.form;
   // Formulaire enregistré par une ancienne version de l'app
@@ -397,14 +483,18 @@ function viewSetup() {
   if (f.courseId === undefined) f.courseId = COURSES[0].id;
   if (!f.mode) f.mode = 'brut';
   const is420 = f.fmt === '420';
-  const net = is420 && f.mode === 'net';
+  const scored = f.fmt !== 'acp'; // formules avec saisie des scores (4-2-0, Wolf)
+  const net = scored && f.mode === 'net';
   let h = header('<button class="hbtn" data-act="home">‹ Annuler</button>', 'Nouvelle partie', '');
   h += '<main>';
   h += `<div class="card"><label class="field">Formule</label>
-    <div class="seg"><button class="${!is420 ? 'on' : ''}" data-act="setFmt" data-v="acp">Approche Chip Putt</button>
-    <button class="${is420 ? 'on' : ''}" data-act="setFmt" data-v="420">4-2-0</button></div>
-    ${is420 ? `<div class="muted small" style="margin-top:8px">3 joueurs : 4-2-0 (la Chouette) · 4 joueurs : 6-4-2-0</div>` : ''}</div>`;
-  h += `<div class="card"><label class="field">Joueurs (${is420 ? '3 ou 4' : '2 à 4'})${net ? '<span class="muted small" style="float:right;font-weight:600">Handicap de jeu</span>' : ''}</label>`;
+    <div class="seg"><button class="${f.fmt === 'acp' ? 'on' : ''}" data-act="setFmt" data-v="acp">Approche Chip Putt</button>
+    <button class="${is420 ? 'on' : ''}" data-act="setFmt" data-v="420">4-2-0</button>
+    <button class="${f.fmt === 'wolf' ? 'on' : ''}" data-act="setFmt" data-v="wolf">Wolf</button></div>
+    ${is420 ? `<div class="muted small" style="margin-top:8px">3 joueurs : 4-2-0 (la Chouette) · 4 joueurs : 6-4-2-0</div>` : ''}
+    ${f.fmt === 'wolf' ? `<div class="muted small" style="margin-top:8px">4 joueurs · sur chaque trou, le Loup joue avec un partenaire ou seul contre les 3 autres</div>` : ''}</div>`;
+  h += `<div class="card"><label class="field">Joueurs (${playersHint[f.fmt]})${net ? '<span class="muted small" style="float:right;font-weight:600">Handicap de jeu</span>' : ''}</label>`;
+  if (f.fmt === 'wolf') h += `<div class="muted small" style="margin:-2px 0 8px">L'ordre des joueurs fixe la rotation du Loup.</div>`;
   f.players.forEach((p, i) => {
     h += `<div class="player-row"><input class="input" data-field="player" data-i="${i}" value="${esc(p)}" placeholder="Prénom joueur ${i + 1}" autocomplete="off" autocapitalize="words" maxlength="16">
       ${net ? `<input class="input hcp" data-field="hcp" data-i="${i}" value="${esc(f.hcp[i] ?? '')}" placeholder="Hcp" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" aria-label="Handicap de jeu joueur ${i + 1}">` : ''}
@@ -412,7 +502,7 @@ function viewSetup() {
   });
   if (f.players.length < 4) h += `<button class="btn btn-secondary" data-act="addPlayer" style="min-height:46px;font-size:16px">+ Ajouter un joueur</button>`;
   h += `</div>`;
-  if (is420) {
+  if (scored) {
     h += `<div class="card"><label class="field">Golf</label>
       <select class="input" data-field="courseId">${COURSES.map((c) => `<option value="${c.id}" ${f.courseId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
       <option value="" ${!f.courseId ? 'selected' : ''}>Autre golf</option></select>
@@ -570,6 +660,137 @@ function viewCard420(g) {
   return h;
 }
 
+const fmtSc = (v) => (v === Infinity ? '✕' : String(v));
+const ptsTxt = (v) => `${v} pt${v > 1 ? 's' : ''}`;
+// Phrase de résultat du trou (Wolf)
+function wolfResultText(g, hole, w, R) {
+  if (!R.res) return 'Choisissez un partenaire pour le Loup, ou Solitaire / Aveugle.';
+  const duel = `${fmtSc(R.a)} contre ${fmtSc(R.b)}`;
+  if (R.res === 'tie') return `Égalité (${duel}) : personne ne marque.`;
+  const tbl = wolfTable(hole.team);
+  const solo = typeof hole.team !== 'number';
+  if (R.res === 'wolf') return solo
+    ? `${esc(g.players[w])} gagne seul (${duel}) : +${tbl[0]}`
+    : `${esc(g.players[w])} et ${esc(g.players[hole.team])} gagnent (${duel}) : +${tbl[0]} chacun`;
+  return `${wolfSides(hole, w).others.map((i) => esc(g.players[i])).join(', ')} gagnent (${fmtSc(R.b)} contre ${fmtSc(R.a)}) : +${tbl[1]} chacun`;
+}
+
+function viewHoleWolf(g) {
+  const u = S.ui;
+  const ci = currentIdx(g);
+  const live = g.status === 'playing' && u.holeIdx === ci;
+  const hole = live ? g.holes[u.holeIdx] : u.draft;
+  if (!hole) { S.ui = { screen: 'card', gameId: g.id }; return viewCardWolf(g); }
+  const net = g.mode === 'net';
+  const w = wolfOf(g, u.holeIdx, hole);
+  const rot = u.holeIdx < wolfRotation(g);
+  const t = totalsWolf(g, holesView(g));
+  const R = wolfResult(g, hole, w);
+  const team = hole.team;
+  let h;
+  if (live) h = header('<button class="hbtn" data-act="home">‹ Accueil</button>', g.course ? esc(g.course) : 'Partie', '<button class="hbtn right" data-act="openCard" data-id="' + g.id + '">Carte</button>');
+  else h = header('<button class="hbtn" data-act="cancelEdit">‹ Annuler</button>', 'Correction', '');
+  h += '<main>';
+  if (!live) h += `<div class="editbanner">✏️ Correction du trou ${hole.n}. Pensez à enregistrer.</div>`;
+  h += `<div class="holehead"><span class="num">Trou ${hole.n}</span><span class="prog">${u.holeIdx + 1} / ${g.holes.length}</span></div>`;
+  h += `<div class="holeinfo">${hole.par ? `Par ${hole.par} · Handicap du trou ${hole.si} · ` : ''}${esc(fmtLabel(g))}</div>`;
+  h += `<div class="totals" style="grid-template-columns:repeat(4,1fr)">`;
+  g.players.forEach((p, i) => {
+    h += `<div class="tot"><div class="n">${i === w ? '🐺 ' : ''}${esc(p)}</div><div class="v">${t[i].pts}</div><div class="d">${live && R.pts[i] ? '+' + R.pts[i] + ' ce trou' : ''}</div></div>`;
+  });
+  h += '</div>';
+  // Le Loup et son choix
+  const order = [0, 1, 2, 3].map((k) => (w + k) % 4);
+  h += `<div class="point" style="--cat:var(--green2)"><div class="ph"><span class="pt">🐺 Loup : ${esc(g.players[w])}</span>
+    <span class="hint">${rot ? 'chacun son tour' : 'dernier au classement'}</span></div>
+    <div class="muted small" style="margin-top:4px">Ordre de départ : ${order.map((i) => esc(g.players[i])).join(', ')}</div>`;
+  if (!rot) {
+    h += `<div class="muted small" style="margin-top:10px">Changer de Loup :</div><div class="seg" style="margin-top:4px">${g.players.map((p, i) =>
+      `<button class="${i === w ? 'on' : ''}" data-act="setWolf" data-i="${i}">${esc(p)}</button>`).join('')}</div>`;
+  }
+  h += `<div class="small" style="font-weight:700;margin-top:12px">Partenaire</div>
+    <div class="choices" style="grid-template-columns:repeat(3,1fr);margin-top:6px">${order.slice(1).map((i) =>
+      `<button class="choice ${team === i ? 'sel' : ''}" data-act="setTeam" data-v="${i}">${esc(g.players[i])}</button>`).join('')}</div>
+    <div class="small" style="font-weight:700;margin-top:12px">Ou seul contre les 3 autres</div>
+    <div class="choices" style="grid-template-columns:1fr 1fr;margin-top:6px">
+      <button class="choice ${team === 'lone' ? 'sel' : ''}" data-act="setTeam" data-v="lone">Solitaire</button>
+      <button class="choice ${team === 'blind' ? 'sel' : ''}" data-act="setTeam" data-v="blind">Aveugle</button></div>
+    <div class="nobody">Partenaire : 2 pts chacun (3 pour chaque adversaire s'ils perdent) · Solitaire : 4 pts (1 pour chaque adversaire s'il perd) · Aveugle, annoncé avant le départ du Loup : le double</div></div>`;
+  h += `<div class="wolfres ${R.res || 'none'}">${wolfResultText(g, hole, w, R)}</div>`;
+  // Scores
+  h += '<div class="card" style="padding:4px 12px">';
+  g.players.forEach((p, i) => {
+    const s = hole.s[i];
+    const picked = s === PICKED;
+    const rec = net ? strokesReceived(g.hcp[i], hole.si) : 0;
+    const role = i === w ? (team === 'lone' ? '🐺 Loup solitaire' : team === 'blind' ? '🐺 Loup aveugle' : '🐺 Loup')
+      : i === team ? '🤝 Partenaire' : R.res ? 'Adversaire' : '';
+    const sub = [];
+    if (role) sub.push(role);
+    sub.push(ptsTxt(R.pts[i]));
+    if (net) sub.push(rec ? `reçoit ${rec} coup${rec > 1 ? 's' : ''}` : 'ne reçoit pas de coup');
+    if (net && !picked && rec) sub.push(`net ${s - rec}`);
+    h += `<div class="sp ${picked ? 'picked' : ''}"><div class="spn"><div class="nm">${esc(p)}</div><div class="sub">${sub.join(' · ')}</div></div>
+      <div class="stepper"><button data-act="step" data-i="${i}" data-d="-1" aria-label="Un coup de moins">−</button>
+      <span class="val">${picked ? '✕' : s}</span>
+      <button data-act="step" data-i="${i}" data-d="1" aria-label="Un coup de plus">+</button>
+      <button class="xbtn ${picked ? 'on' : ''}" data-act="pickUp" data-i="${i}" aria-label="Balle ramassée">✕</button></div></div>`;
+  });
+  h += '</div><p class="muted small" style="text-align:center;margin-top:-4px">✕ = balle ramassée</p>';
+  h += '</main>';
+  const isLast = ci === g.holes.length - 1;
+  h += `<div class="bottombar"><div class="inner">${live
+    ? `<button class="btn btn-primary" data-act="validate">${isLast ? 'Valider et terminer la partie' : `Valider le trou ${hole.n}`}</button>`
+    : `<button class="btn btn-primary" data-act="saveEdit">Enregistrer la correction</button>`}</div></div>`;
+  return h;
+}
+
+const wolfChoiceShort = (team) => (team === 'lone' ? 'seul' : team === 'blind' ? 'aveugle' : '');
+function viewCardWolf(g) {
+  const playing = g.status === 'playing';
+  const ci = currentIdx(g);
+  const r = ranking(g);
+  const t = totalsWolf(g);
+  const hasPar = g.holes.some((x) => x.par);
+  let h = header(`<button class="hbtn" data-act="${playing ? 'resume' : 'home'}">‹ ${playing ? 'Trou' : 'Accueil'}</button>`, 'Carte de score', '');
+  h += '<main>';
+  const sub = `${g.course ? esc(g.course) + ' · ' : ''}${fmtDate(g.created, true)}`;
+  if (!playing) h += `<div class="winner"><div class="big">${winnerText(g)}</div><div class="small" style="opacity:.85;margin-top:4px">${esc(fmtLabel(g))}<br>${sub}</div></div>`;
+  else h += `<div class="muted small" style="margin:0 4px 10px">${esc(fmtLabel(g))} · ${sub} · partie en cours</div>`;
+  h += `<div class="card" style="padding:6px 14px">`;
+  r.forEach((o) => {
+    const det = [`Loup ${o.wolf} fois`];
+    if (o.played) det.push(`${o.strokes} coup${o.strokes > 1 ? 's' : ''}${o.picked ? ' + ' + o.picked + ' ✕' : ''}`);
+    if (g.mode === 'net') det.push(`hcp ${g.hcp[o.i]}`);
+    h += `<div class="rank"><span class="pos">${rankLabel(o.rank)}</span><span class="nm">${esc(o.n)}</span>
+      <span style="text-align:right"><div class="pts">${ptsTxt(o.pts)}</div><div class="det">${det.join(' · ')}</div></span></div>`;
+  });
+  h += `</div>`;
+  h += `<table class="sc s420"><thead><tr><th>Trou</th>${hasPar ? '<th class="par">Par</th>' : ''}${g.players.map((p) => `<th>${esc(p)}</th>`).join('')}</tr></thead><tbody>`;
+  g.holes.forEach((ho, idx) => {
+    const cls = playing && idx === ci ? 'cur' : (!ho.done ? 'todo' : '');
+    const w = ho.done ? wolfOf(g, idx, ho) : -1;
+    const pts = ho.done ? wolfResult(g, ho, w).pts : [];
+    const mine = ho.done ? wolfSides(ho, w).mine : [];
+    h += `<tr class="${cls}" data-act="openHole" data-idx="${idx}"><td>${ho.n}${ho.done && typeof ho.team !== 'number' ? `<div class="spt">${wolfChoiceShort(ho.team)}</div>` : ''}</td>${hasPar ? `<td class="par">${ho.par || ''}</td>` : ''}`;
+    g.players.forEach((_, i) => {
+      if (!ho.done) { h += '<td></td>'; return; }
+      const s = ho.s[i];
+      const rec = g.mode === 'net' ? strokesReceived(g.hcp[i], ho.si) : 0;
+      h += `<td class="${mine.includes(i) ? 'wt' : ''}"><div class="sv">${s === PICKED ? '<span style="color:var(--danger)">✕</span>' : s}${rec ? `<sup>${'•'.repeat(Math.min(rec, 3))}</sup>` : ''}</div><div class="spt">${i === w ? '🐺 ' : ''}${ptsTxt(pts[i])}</div></td>`;
+    });
+    h += '</tr>';
+  });
+  const pad = hasPar ? '<td class="par"></td>' : '';
+  h += `</tbody><tfoot><tr><td>Tot.</td>${pad}${t.map((x) => `<td>${x.pts}</td>`).join('')}</tr></tfoot></table>`;
+  h += `<p class="muted small" style="text-align:center;margin-bottom:2px">🐺 = Loup · fond doré = équipe du Loup · seul / aveugle = Loup sans partenaire · ✕ = balle ramassée${g.mode === 'net' ? ' · • = coup reçu' : ''}</p>`;
+  h += `<p class="muted small" style="text-align:center">Touchez un trou joué pour le corriger.</p>`;
+  if (!playing) h += `<button class="link danger" data-act="deleteGame">Supprimer cette partie</button>`;
+  h += '</main>';
+  h += `<div class="bottombar"><div class="inner"><button class="btn btn-primary" data-act="share">📤 Partager la carte</button></div></div>`;
+  return h;
+}
+
 function badges(h, i) {
   const b = CATS.filter((c) => h[c.k] === i).map((c) => `<span class="bd ${c.k}">${c.letter}</span>`).join('');
   return b || (h.done ? '<span class="muted">·</span>' : '');
@@ -660,20 +881,20 @@ const A = {
   setMode(el) { const f = S.ui.form; if (el.dataset.v === 'net' && !f.courseId) return; f.mode = el.dataset.v; f.error = ''; save(); render(); },
   startGame() {
     const f = S.ui.form;
-    const is420 = f.fmt === '420';
     const fail = (msg) => { f.error = msg; save(); render(); };
     const names = f.players.map((p, i) => p.trim() || `Joueur ${i + 1}`);
     const lower = names.map((n) => n.toLowerCase());
     if (new Set(lower).size !== lower.length) return fail('Deux joueurs ont le même prénom. Ajoutez une initiale pour les distinguer.');
     const holeNums = holeNumbers(f.count, f.start);
     let g;
-    if (!is420) {
+    if (f.fmt === 'acp') {
       g = {
         id: uid(), created: new Date().toISOString(), fmt: 'acp', course: f.course.trim(), players: names, status: 'playing',
         holes: holeNums.map((n) => ({ n, a: null, c: null, p: null, done: false }))
       };
     } else {
-      if (names.length < 3) return fail('Le 4-2-0 se joue à 3 ou 4 joueurs.');
+      if (f.fmt === '420' && names.length < 3) return fail('Le 4-2-0 se joue à 3 ou 4 joueurs.');
+      if (f.fmt === 'wolf' && names.length !== 4) return fail('Le Wolf se joue à 4 joueurs.');
       const course = courseById(f.courseId);
       const mode = course && f.mode === 'net' ? 'net' : 'brut';
       let hcp = names.map(() => 0);
@@ -683,12 +904,15 @@ const A = {
         hcp = hcp.map(Number);
       }
       g = {
-        id: uid(), created: new Date().toISOString(), fmt: '420', mode, courseId: course ? course.id : '',
+        id: uid(), created: new Date().toISOString(), fmt: f.fmt, mode, courseId: course ? course.id : '',
         course: course ? course.name : f.course.trim(), players: names, hcp, status: 'playing',
         holes: holeNums.map((n) => {
           const par = course ? course.holes[n - 1][0] : null;
           const si = course ? course.holes[n - 1][1] : null;
-          return { n, par, si, s: names.map(() => par || 4), done: false };
+          const ho = { n, par, si, s: names.map(() => par || 4), done: false };
+          // Wolf : team = choix du Loup (partenaire, 'lone', 'blind'), wolf = Loup figé à la validation
+          if (f.fmt === 'wolf') { ho.team = null; ho.wolf = null; }
+          return ho;
         })
       };
     }
@@ -702,6 +926,19 @@ const A = {
     const i = +el.dataset.i, d = +el.dataset.d;
     const s = hole.s[i];
     hole.s[i] = s === PICKED ? (hole.par || 4) : Math.min(15, Math.max(1, s + d));
+    save(); render();
+  },
+  setTeam(el) {
+    const hole = editableHole(getGame(S.ui.gameId));
+    const v = el.dataset.v;
+    hole.team = /^\d$/.test(v) ? +v : v;
+    save(); render();
+  },
+  setWolf(el) {
+    const hole = editableHole(getGame(S.ui.gameId));
+    const i = +el.dataset.i;
+    hole.wolf = i;
+    if (hole.team === i) hole.team = null; // le nouveau Loup ne peut pas être son propre partenaire
     save(); render();
   },
   pickUp(el) {
@@ -734,7 +971,11 @@ const A = {
   async validate() {
     const g = getGame(S.ui.gameId);
     const hole = g.holes[S.ui.holeIdx];
-    const missing = fmtOf(g) === '420' ? [] : CATS.filter((c) => hole[c.k] === null).map((c) => c.name);
+    if (fmtOf(g) === 'wolf') {
+      if (hole.team === null || hole.team === undefined) return toast('Choisissez d\'abord le partenaire du Loup, ou Solitaire / Aveugle');
+      hole.wolf = wolfOf(g, S.ui.holeIdx, hole); // on fige le Loup du trou
+    }
+    const missing = fmtOf(g) === 'acp' ? CATS.filter((c) => hole[c.k] === null).map((c) => c.name) : [];
     if (missing.length) {
       const msg = `${missing.length > 1 ? 'Points non attribués' : 'Point non attribué'} : <b>${missing.join(', ')}</b>.<br>Valider le trou ${hole.n} quand même ?`;
       if (!(await confirmBox(msg, 'Valider quand même'))) return;
@@ -802,10 +1043,12 @@ document.addEventListener('change', (e) => {
 function drawCard(g) {
   const W = 1080, P = 56, n = g.players.length;
   const F = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif';
-  const is420 = fmtOf(g) === '420';
+  const fm = fmtOf(g);
+  const scored = fm !== 'acp'; // formules avec scores (4-2-0, Wolf)
+  const isWolf = fm === 'wolf';
   const r = ranking(g);
   const t = anyTotals(g);
-  const bandH = 210, rankRowH = 70, rowH = is420 ? 66 : 56, holeColW = 130;
+  const bandH = 210, rankRowH = 70, rowH = scored ? 66 : 56, holeColW = 130;
   const colW = (W - 2 * P - holeColW) / n;
   const tableTop = bandH + 40 + r.length * rankRowH + 40;
   const H = tableTop + rowH * (g.holes.length + 2) + 170;
@@ -819,7 +1062,7 @@ function drawCard(g) {
   // Bandeau
   x.fillStyle = '#1F4D3A'; x.fillRect(0, 0, W, bandH);
   x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.font = `800 58px ${F}`; x.fillText(is420 ? fmtLabel(g).replace(' (la Chouette)', ' · la Chouette') : 'Approche · Chip · Putt', W / 2, 78);
+  x.font = `800 58px ${F}`; x.fillText(scored ? fmtLabel(g).replace(' (la Chouette)', ' · la Chouette') : 'Approche · Chip · Putt', W / 2, 78);
   x.font = `500 32px ${F}`; x.fillStyle = 'rgba(255,255,255,.88)';
   x.fillText(fit((g.course ? g.course + ' · ' : '') + fmtDate(g.created, true), W - 2 * P), W / 2, 140);
   x.font = `600 26px ${F}`; x.fillStyle = 'rgba(255,255,255,.7)';
@@ -837,7 +1080,7 @@ function drawCard(g) {
     x.textAlign = 'right'; x.font = `800 36px ${F}`;
     x.fillText(`${o.pts} pt${o.pts > 1 ? 's' : ''}`, W - P - 24, y + (rankRowH - 10) / 2);
     x.font = `600 22px ${F}`; x.fillStyle = '#5E6A63';
-    x.fillText(is420 ? `${o.cum} pts cumulés` : `${o.a} A · ${o.c} C · ${o.p} P`, W - P - 170, y + (rankRowH - 10) / 2);
+    x.fillText(isWolf ? `Loup ${o.wolf} fois` : scored ? `${o.cum} pts cumulés` : `${o.a} A · ${o.c} C · ${o.p} P`, W - P - 170, y + (rankRowH - 10) / 2);
     y += rankRowH;
   });
 
@@ -851,21 +1094,24 @@ function drawCard(g) {
   g.holes.forEach((ho, k) => {
     x.fillStyle = k % 2 ? '#FAF8F2' : '#fff'; x.fillRect(P, y, W - 2 * P, rowH);
     x.fillStyle = ho.done ? '#18211D' : '#A9ADA3'; x.font = `800 26px ${F}`; x.textAlign = 'center';
-    x.fillText(String(ho.n), P + holeColW / 2, y + rowH / 2 - (is420 && ho.par ? 9 : 0));
-    if (is420) {
+    x.fillText(String(ho.n), P + holeColW / 2, y + rowH / 2 - (scored && ho.par ? 9 : 0));
+    if (scored) {
       x.font = `600 18px ${F}`; x.fillStyle = '#5E6A63';
       if (ho.par) x.fillText(`par ${ho.par}`, P + holeColW / 2, y + rowH / 2 + 19);
       x.font = `800 26px ${F}`;
       if (ho.done) {
-        const hp = holePoints(g, ho);
+        const hp = scoredHolePoints(g, ho, k);
+        const w = isWolf ? wolfOf(g, k, ho) : -1;
+        const mine = isWolf ? wolfSides(ho, w).mine : [];
         g.players.forEach((_, i) => {
           const cx = P + holeColW + colW * (i + 0.5);
+          if (mine.includes(i)) { x.fillStyle = '#FBF1DC'; x.fillRect(P + holeColW + colW * i, y, colW, rowH); }
           const s = ho.s[i];
           const rec = g.mode === 'net' ? strokesReceived(g.hcp[i], ho.si) : 0;
           x.font = `800 28px ${F}`; x.fillStyle = s === PICKED ? '#B3261E' : '#18211D';
           x.fillText((s === PICKED ? '✕' : String(s)) + (rec ? ' ' + '•'.repeat(Math.min(rec, 3)) : ''), cx, y + rowH / 2 - 9);
           x.font = `700 19px ${F}`; x.fillStyle = '#2E6B4A';
-          x.fillText(`${hp[i]} pt${hp[i] > 1 ? 's' : ''}`, cx, y + rowH / 2 + 19);
+          x.fillText(`${i === w ? '🐺 ' + (wolfChoiceShort(ho.team) ? wolfChoiceShort(ho.team) + ' · ' : '') : ''}${hp[i]} pt${hp[i] > 1 ? 's' : ''}`, cx, y + rowH / 2 + 19);
         });
       }
       y += rowH;
@@ -886,7 +1132,7 @@ function drawCard(g) {
   });
   x.fillStyle = '#E6EFE9'; x.fillRect(P, y, W - 2 * P, rowH);
   x.fillStyle = '#1F4D3A'; x.font = `800 28px ${F}`;
-  x.fillText(is420 ? 'Score' : 'Total', P + holeColW / 2, y + rowH / 2);
+  x.fillText(scored && !isWolf ? 'Score' : 'Total', P + holeColW / 2, y + rowH / 2);
   t.forEach((v, i) => { x.font = `800 32px ${F}`; x.fillText(String(v.pts), P + holeColW + colW * (i + 0.5), y + rowH / 2); });
   // Lignes verticales
   x.strokeStyle = '#E4E0D5'; x.lineWidth = 2;
@@ -898,9 +1144,9 @@ function drawCard(g) {
   x.fillText(`ACP Golf · ${TAGLINE}`, W / 2, H - 38, W - 2 * P);
   x.fillStyle = '#E3AE45'; x.fillRect(W / 2 - 40, H - 76, 80, 4);
   // Légende
-  if (is420) {
+  if (scored) {
     x.font = `600 24px ${F}`; x.textAlign = 'center'; x.fillStyle = '#5E6A63';
-    x.fillText(`Score = points cumulés − ceux du dernier · ✕ = balle ramassée${g.mode === 'net' ? ' · • = coup reçu' : ''}`, W / 2, y, W - 2 * P);
+    x.fillText(`${isWolf ? '🐺 = Loup · fond doré = équipe du Loup' : 'Score = points cumulés − ceux du dernier'} · ✕ = balle ramassée${g.mode === 'net' ? ' · • = coup reçu' : ''}`, W / 2, y, W - 2 * P);
     return cv;
   }
   x.font = `600 24px ${F}`; x.textAlign = 'left';
@@ -928,7 +1174,7 @@ function dataURLtoBlob(u) {
 async function shareCard(g) {
   // Tout est synchrone jusqu'à navigator.share pour conserver le « geste utilisateur » exigé par iOS.
   const url = drawCard(g).toDataURL('image/png');
-  const fname = `${fmtOf(g) === '420' ? '4-2-0' : 'approche-chip-putt'}-${g.created.slice(0, 10)}.png`;
+  const fname = `${{ 420: '4-2-0', wolf: 'wolf' }[fmtOf(g)] || 'approche-chip-putt'}-${g.created.slice(0, 10)}.png`;
   let file = null;
   try { file = new File([dataURLtoBlob(url)], fname, { type: 'image/png' }); } catch (e) {}
   if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
